@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   User,
   Users,
@@ -447,15 +448,23 @@ function UsageDonut() {
 
 function ArrowRightIcon() { return <span className="text-[14px] leading-none">→</span>; }
 
-export default function SettingsPage() {
-
-
-
-
-
+function SettingsContent() {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
 
   const { data, error, loading } = useFetch(() => api.getSettings());
-  const [nav, setNav] = useState("model");
+  const [nav, setNav] = useState(() => {
+    if (tabParam && SETTINGS_NAV.some((n) => n.key === tabParam)) {
+      return tabParam;
+    }
+    return "account";
+  });
+
+  useEffect(() => {
+    if (tabParam && SETTINGS_NAV.some((n) => n.key === tabParam)) {
+      setNav(tabParam);
+    }
+  }, [tabParam]);
   const [model, setModel] = useState<ModelType>("gan");
   const [bands, setBands] = useState({ rgb: true, nir: true, swir: false });
   const [cloudMask, setCloudMask] = useState(true);
@@ -2386,5 +2395,13 @@ export default function SettingsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="p-6"><LoadingState /></div>}>
+      <SettingsContent />
+    </Suspense>
   );
 }

@@ -486,7 +486,7 @@ export function Topbar() {
               {/* Footer */}
               <div className="p-2.5 border-t border-line bg-canvas/30 flex items-center justify-between text-[11.5px]">
                 <Link
-                  href="/settings"
+                  href="/settings?tab=notifications"
                   onClick={() => setOpenMenu(null)}
                   className="text-primary hover:underline font-medium inline-flex items-center gap-1"
                 >
@@ -552,7 +552,7 @@ export function Topbar() {
               {/* Menu items */}
               <div className="space-y-0.5 text-[13px]">
                 <Link
-                  href="/settings"
+                  href="/settings?tab=account"
                   onClick={() => setOpenMenu(null)}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-ink-soft hover:bg-canvas hover:text-ink transition"
                 >
@@ -560,7 +560,7 @@ export function Topbar() {
                   <span>Account Profile</span>
                 </Link>
                 <Link
-                  href="/settings"
+                  href="/settings?tab=security"
                   onClick={() => setOpenMenu(null)}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-ink-soft hover:bg-canvas hover:text-ink transition"
                 >
@@ -568,7 +568,7 @@ export function Topbar() {
                   <span>Security & Credentials</span>
                 </Link>
                 <Link
-                  href="/settings"
+                  href="/settings?tab=billing"
                   onClick={() => setOpenMenu(null)}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-ink-soft hover:bg-canvas hover:text-ink transition"
                 >
@@ -579,7 +579,7 @@ export function Topbar() {
                   </span>
                 </Link>
                 <Link
-                  href="/settings"
+                  href="/settings?tab=model"
                   onClick={() => setOpenMenu(null)}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-ink-soft hover:bg-canvas hover:text-ink transition"
                 >
