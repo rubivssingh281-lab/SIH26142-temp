@@ -32,7 +32,7 @@ export default function ProjectsPage() {
   const { data, error, loading } = useFetch(() => api.getProjects({ category, q }), [category, q]);
 
   return (
-    <div className="p-6 space-y-5 max-w-[1600px] mx-auto">
+    <div className="p-4 sm:p-6 pr-6 sm:pr-8 space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-4">
         <h1 className="text-[24px] font-semibold text-ink">All Projects</h1>

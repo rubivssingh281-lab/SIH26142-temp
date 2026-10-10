@@ -56,7 +56,7 @@ export default function NewJobPage() {
   }
 
   return (
-    <div className="p-6 space-y-5 max-w-[1600px] mx-auto">
+    <div className="p-4 sm:p-6 pr-6 sm:pr-8 space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
       {/* Stepper */}
       <Card className="p-4">
         <div className="flex items-center">

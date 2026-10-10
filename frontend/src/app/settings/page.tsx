@@ -338,25 +338,25 @@ function ChannelCheckbox({ checked, onChange }: { checked: boolean; onChange: ()
 
 function AlertMatrix({ title, rules, onToggle }: { title: string; rules: AlertRule[]; onToggle: (ruleId: string, channel: Channel) => void; }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.03)]">
+    <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.03)] min-w-0">
       <div className="border-b border-slate-100 px-4 py-4"><h2 className="text-[14px] font-semibold text-slate-900">{title}</h2></div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[500px] border-collapse">
+      <div className="overflow-x-auto min-w-0">
+        <table className="w-full border-collapse">
           <thead>
             <tr className="bg-slate-50">
               <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-slate-600">Event</th>
-              <th className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-600"><span className="inline-flex items-center gap-1"><Mail size={13} /> Email</span></th>
-              <th className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-600"><span className="inline-flex items-center gap-1"><Bell size={13} /> In-App</span></th>
-              <th className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-600"><span className="inline-flex items-center gap-1"><Smartphone size={13} /> SMS</span></th>
+              <th className="w-16 px-2 py-2.5 text-center text-[10px] font-semibold text-slate-600"><span className="inline-flex items-center gap-1"><Mail size={13} /> Email</span></th>
+              <th className="w-16 px-2 py-2.5 text-center text-[10px] font-semibold text-slate-600"><span className="inline-flex items-center gap-1"><Bell size={13} /> In-App</span></th>
+              <th className="w-16 px-2 py-2.5 text-center text-[10px] font-semibold text-slate-600"><span className="inline-flex items-center gap-1"><Smartphone size={13} /> SMS</span></th>
             </tr>
           </thead>
           <tbody>
             {rules.map((rule) => (
               <tr key={rule.id} className="border-t border-slate-100">
                 <td className="px-3 py-3 text-[11px] font-medium text-slate-700">{rule.label}</td>
-                <td className="px-3 py-3"><div className="flex justify-center"><ChannelCheckbox checked={rule.email} onChange={() => onToggle(rule.id, "email")} /></div></td>
-                <td className="px-3 py-3"><div className="flex justify-center"><ChannelCheckbox checked={rule.inApp} onChange={() => onToggle(rule.id, "inApp")} /></div></td>
-                <td className="px-3 py-3"><div className="flex justify-center"><ChannelCheckbox checked={rule.sms} onChange={() => onToggle(rule.id, "sms")} /></div></td>
+                <td className="w-16 px-2 py-3"><div className="flex justify-center"><ChannelCheckbox checked={rule.email} onChange={() => onToggle(rule.id, "email")} /></div></td>
+                <td className="w-16 px-2 py-3"><div className="flex justify-center"><ChannelCheckbox checked={rule.inApp} onChange={() => onToggle(rule.id, "inApp")} /></div></td>
+                <td className="w-16 px-2 py-3"><div className="flex justify-center"><ChannelCheckbox checked={rule.sms} onChange={() => onToggle(rule.id, "sms")} /></div></td>
               </tr>
             ))}
           </tbody>
@@ -653,10 +653,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
-      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-5">
+    <div className="p-4 sm:p-6 pr-6 sm:pr-8 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-5 min-w-0">
         {/* Settings sub-nav */}
-        <Card className="p-2 h-fit">
+        <Card className="p-2 h-fit shrink-0">
           {SETTINGS_NAV.map((n) => {
             const Icon = n.icon;
             const active = nav === n.key;
@@ -672,7 +672,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Content */}
-        <div className="space-y-5">
+        <div className="space-y-5 min-w-0 max-w-full">
 
           {nav === "billing" && (
             <section className="min-w-0">
@@ -728,7 +728,7 @@ export default function SettingsPage() {
               </SectionCard>
 
               {/* METRICS ROW */}
-              <div className="mt-4 grid gap-4 xl:grid-cols-[1.18fr_1fr_0.9fr]">
+              <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3">
                 <SectionCard title="Storage Used">
                   <div className="flex items-center gap-5">
                     <UsageDonut />
@@ -787,7 +787,7 @@ export default function SettingsPage() {
               </div>
 
               {/* STORAGE + USAGE HISTORY */}
-              <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1.08fr]">
+              <div className="mt-4 grid gap-4 grid-cols-1 2xl:grid-cols-2">
                 <SectionCard title="Storage Breakdown by Project">
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[500px]">
@@ -857,7 +857,7 @@ export default function SettingsPage() {
               </div>
 
               {/* INVOICES + PAYMENT */}
-              <div className="mt-4 grid gap-4 xl:grid-cols-[1.25fr_0.7fr_0.9fr]">
+              <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3">
                 <SectionCard title="Invoices & Payment">
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[470px]">
@@ -929,7 +929,7 @@ export default function SettingsPage() {
               </div>
 
               {/* TOP ROW */}
-              <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+              <div className="grid gap-4 grid-cols-1 2xl:grid-cols-[300px_minmax(0,1fr)]">
                 {/* PASSWORD + 2FA */}
                 <div className="space-y-4">
                   {/* Password */}
@@ -1040,7 +1040,7 @@ export default function SettingsPage() {
               </div>
 
               {/* SECOND ROW */}
-              <div className="mt-4 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+              <div className="mt-4 grid gap-4 grid-cols-1 2xl:grid-cols-[1.05fr_0.95fr]">
                 {/* LOGIN HISTORY */}
                 <SectionCard title="Login History">
                   <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -1171,10 +1171,10 @@ export default function SettingsPage() {
                 <p className="mt-1 text-[13px] text-slate-500">Choose how and when you want to be notified</p>
               </div>
 
-              {/* TOP THREE PANELS */}
-              <div className="grid gap-4 xl:grid-cols-[0.8fr_1fr_1fr]">
+              {/* ROW 1: Channels & Frequency */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Notification Channels */}
-                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.03)]">
+                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.03)] min-w-0">
                   <div className="border-b border-slate-100 px-4 py-4"><h2 className="text-[14px] font-semibold">Notification Channels</h2></div>
                   <div>
                     {/* Email */}
@@ -1207,16 +1207,9 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </section>
-                {/* Job Alerts */}
-                <AlertMatrix title="Job & Processing Alerts" rules={jobAlerts} onToggle={(ruleId, channel) => toggleRule(setJobAlerts, ruleId, channel)} />
-                {/* Team Alerts */}
-                <AlertMatrix title="Team & Account Alerts" rules={teamAlerts} onToggle={(ruleId, channel) => toggleRule(setTeamAlerts, ruleId, channel)} />
-              </div>
 
-              {/* LOWER SECTION */}
-              <div className="mt-4 grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
                 {/* Notification Frequency */}
-                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.03)]">
+                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.03)] min-w-0">
                   <div className="border-b border-slate-100 px-4 py-4"><h2 className="text-[14px] font-semibold">Notification Frequency</h2></div>
                   <div className="p-4">
                     <div className="space-y-3">
@@ -1267,9 +1260,20 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </section>
-                {/* Notification Preview */}
-                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.03)]">
-                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
+              </div>
+
+              {/* ROW 2: Alert Matrices */}
+              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Job Alerts */}
+                <AlertMatrix title="Job & Processing Alerts" rules={jobAlerts} onToggle={(ruleId, channel) => toggleRule(setJobAlerts, ruleId, channel)} />
+                {/* Team Alerts */}
+                <AlertMatrix title="Team & Account Alerts" rules={teamAlerts} onToggle={(ruleId, channel) => toggleRule(setTeamAlerts, ruleId, channel)} />
+              </div>
+
+              {/* ROW 3: Notification Preview */}
+              <div className="mt-4">
+                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.03)] min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-4">
                     <div>
                       <h2 className="text-[14px] font-semibold">Notification Preview</h2>
                       <p className="mt-1 text-[9px] text-slate-500">This is how your notifications will appear.</p>
@@ -1338,7 +1342,7 @@ export default function SettingsPage() {
               </div>
 
               {/* SAVE BUTTON */}
-              <div className="mt-4 flex justify-end">
+              <div className="mt-5 flex justify-end">
                 <button type="button" onClick={handleSaveNotifications} className="inline-flex h-[40px] items-center gap-2 rounded-[7px] px-5 text-[11px] font-semibold text-white shadow-sm transition hover:brightness-95" style={{ backgroundColor: ORANGE }}>
                   <Save size={15} />
                   {savedNotifications ? "Preferences Saved" : "Save Preferences"}
@@ -1608,19 +1612,19 @@ export default function SettingsPage() {
 
           {nav === "api" && (
             <section className="min-w-0">
-              <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h1 className="text-[27px] font-semibold tracking-[-0.03em] text-slate-950">API & Integrations</h1>
                   <p className="mt-1 text-[13px] text-slate-500">Manage API keys and connected external services</p>
                 </div>
-                <button type="button" className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-[12px] font-medium text-blue-700 transition hover:bg-blue-100">
+                <button type="button" className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-2.5 text-[12px] font-medium text-blue-700 transition hover:bg-blue-100 shrink-0">
                   <Link2 size={15} /> Read our API documentation <ExternalLink size={14} />
                 </button>
               </div>
 
-              <div className="grid gap-4 xl:grid-cols-[1.15fr_0.9fr]">
+              <div className="grid gap-4 grid-cols-1 2xl:grid-cols-2">
                 {/* API KEYS */}
-                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.035)]">
+                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.035)] min-w-0">
                   <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
                     <div className="flex items-center gap-2">
                       <KeyRound size={17} className="text-[#D2691E]" />
@@ -1628,8 +1632,8 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div className="p-3">
-                    <div className="overflow-x-auto rounded-lg border border-slate-200">
-                      <table className="min-w-[650px] w-full">
+                    <div className="overflow-x-auto rounded-lg border border-slate-200 min-w-0">
+                      <table className="w-full min-w-[500px]">
                         <thead>
                           <tr className="bg-slate-50">
                             <th className="px-3 py-2 text-left text-[10px] font-semibold text-slate-600">Key Name</th>
@@ -1682,14 +1686,14 @@ export default function SettingsPage() {
                 </section>
 
                 {/* WEBHOOKS */}
-                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.035)]">
+                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.035)] min-w-0">
                   <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-4">
                     <Webhook size={17} className="text-[#D2691E]" />
                     <h2 className="text-[14px] font-semibold">Webhooks</h2>
                   </div>
                   <div className="p-3">
-                    <div className="overflow-x-auto rounded-lg border border-slate-200">
-                      <table className="min-w-[570px] w-full">
+                    <div className="overflow-x-auto rounded-lg border border-slate-200 min-w-0">
+                      <table className="w-full min-w-[380px]">
                         <thead>
                           <tr className="bg-slate-50">
                             <th className="px-3 py-2 text-left text-[10px] font-semibold text-slate-600">Endpoint</th>
@@ -1702,13 +1706,13 @@ export default function SettingsPage() {
                           {webhooks.map((webhook) => (
                             <tr key={webhook.id} className="border-t border-slate-100">
                               <td className="px-3 py-3">
-                                <div className="min-w-[180px]">
+                                <div className="min-w-[140px]">
                                   <p className="text-[11px] font-semibold text-slate-800">{webhook.name}</p>
                                   <p className="mt-0.5 truncate text-[9px] text-slate-500">{webhook.endpoint}</p>
                                 </div>
                               </td>
                               <td className="px-3 py-3">
-                                <div className="flex max-w-[160px] flex-wrap gap-1">
+                                <div className="flex max-w-[140px] flex-wrap gap-1">
                                   {webhook.events.map((event) => <WebhookEventTag key={event} event={event} />)}
                                 </div>
                               </td>
@@ -1735,7 +1739,7 @@ export default function SettingsPage() {
                 </section>
               </div>
 
-              <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1.05fr]">
+              <div className="mt-4 grid gap-4 grid-cols-1 2xl:grid-cols-[1fr_1.05fr]">
                 {/* CONNECTED INTEGRATIONS */}
                 <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_2px_8px_rgba(15,23,42,0.035)]">
                   <div className="mb-3 flex items-center justify-between">
@@ -1940,7 +1944,7 @@ export default function SettingsPage() {
                 <p className="mt-1.5 text-[14px] text-slate-500">Manage your personal information and preferences</p>
               </div>
 
-              <div className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr]">
+              <div className="grid gap-5 grid-cols-1 2xl:grid-cols-[1.35fr_0.95fr]">
                 <SectionCard title="Profile Information">
                   <div className="grid gap-7 md:grid-cols-[132px_minmax(0,1fr)]">
                     <div className="flex flex-col items-center">
@@ -1984,7 +1988,7 @@ export default function SettingsPage() {
                 </SectionCard>
               </div>
 
-              <div className="mt-5 grid gap-5 xl:grid-cols-[0.98fr_1.02fr]">
+              <div className="mt-5 grid gap-5 grid-cols-1 2xl:grid-cols-2">
                 <SectionCard title="Preferences">
                   <div className="space-y-0">
                     <div className="flex items-center justify-between border-b border-slate-100 py-4">
@@ -2088,7 +2092,7 @@ export default function SettingsPage() {
             <p className="text-[13.5px] text-muted">Configure default models and processing behavior for new enhancement jobs.</p>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
+          <div className="grid grid-cols-1 2xl:grid-cols-[1fr_360px] gap-5">
             {/* Default model */}
             <Card className="p-5">
               <div className="flex items-center gap-1.5 mb-4"><h3 className="text-[15px] font-semibold">Default Super-Resolution Model</h3><Info size={13} className="text-muted" /></div>
@@ -2145,7 +2149,7 @@ export default function SettingsPage() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 2xl:grid-cols-2 gap-5">
             {/* Compute resources */}
             <Card className="p-5">
               <div className="flex items-center gap-1.5 mb-4"><h3 className="text-[15px] font-semibold">Compute Resources</h3><Info size={13} className="text-muted" /></div>

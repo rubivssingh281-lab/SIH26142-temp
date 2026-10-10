@@ -37,7 +37,7 @@ export default function DashboardPage() {
   const { stats, system_status: sys, recent_job: rj, recent_jobs, last_updated } = data;
 
   return (
-    <div className="p-6 space-y-5 max-w-[1600px] mx-auto">
+    <div className="p-4 sm:p-6 pr-6 sm:pr-8 space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
       <div className="flex items-center justify-end gap-2 text-[13px] text-muted">
         <span>Last updated: {last_updated}</span>
         <button onClick={refetch} className="h-7 w-7 grid place-items-center rounded-md hover:bg-canvas transition">
@@ -60,7 +60,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Middle */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 min-w-0">
         <Card className="xl:col-span-2 p-5">
           <div className="flex items-center gap-3 mb-4">
             <h3 className="text-[17px] font-semibold">Recent Job: {rj.job_id}</h3>
@@ -128,7 +128,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Bottom */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 min-w-0">
         <Card className="p-5">
           <SectionTitle>Project Activity</SectionTitle>
           <MapCanvas

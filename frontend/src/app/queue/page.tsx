@@ -41,7 +41,7 @@ export default function QueuePage() {
   const { stats, jobs, cluster } = data;
 
   return (
-    <div className="p-6 space-y-5 max-w-[1600px] mx-auto">
+    <div className="p-4 sm:p-6 pr-6 sm:pr-8 space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <QueueStat title="Queued" value={stats.queued} sub="Jobs waiting" icon={<Clock size={22} className="text-warning-soft" />} bg="bg-warning-bg" />
@@ -82,7 +82,7 @@ export default function QueuePage() {
       </Card>
 
       {/* Main split */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-5 min-w-0">
         <Card className="p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
