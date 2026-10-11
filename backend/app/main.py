@@ -5,7 +5,7 @@ import uuid
 import asyncio
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from app.api.router import api_router
@@ -20,6 +20,17 @@ import redis
 logger = logging.getLogger(__name__)
 request_count = Counter("http_requests_total", "Total HTTP requests", ["method", "path", "status"])
 request_duration = Histogram("http_request_duration_seconds", "HTTP request duration", ["method", "path"])
+
+def _cors_headers(request: Request) -> dict:
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+        headers["Vary"] = "Origin"
+    return headers
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -40,33 +51,81 @@ async def api_error_handler(request: Request, exc: APIError):
     trace_id = getattr(request.state, "trace_id", str(uuid.uuid4()))
     detail = dict(exc.detail) if isinstance(exc.detail, dict) else {"error_code": "api_error", "message": str(exc.detail)}
     detail["trace_id"] = trace_id
+    headers = _cors_headers(request)
+    headers["X-Trace-ID"] = trace_id
     return JSONResponse(
         status_code=exc.status_code,
         content=detail,
+        headers=headers,
     )
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError):
+    trace_id = getattr(request.state, "trace_id", str(uuid.uuid4()))
+    headers = _cors_headers(request)
+    headers["X-Trace-ID"] = trace_id
     return JSONResponse(
         status_code=422,
         content={
             "error_code": "validation_error",
             "message": "Request validation failed",
-            "trace_id": getattr(request.state, "trace_id", str(uuid.uuid4())),
+            "detail": exc.errors(),
+            "trace_id": trace_id,
         },
+        headers=headers,
+    )
+
+
+@app.exception_handler(ResponseValidationError)
+async def response_validation_error_handler(request: Request, exc: ResponseValidationError):
+    logger.exception("response_validation_error", exc_info=exc)
+    trace_id = getattr(request.state, "trace_id", str(uuid.uuid4()))
+    headers = _cors_headers(request)
+    headers["X-Trace-ID"] = trace_id
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error_code": "response_validation_error",
+            "message": "Response serialization failed",
+            "detail": str(exc),
+            "trace_id": trace_id,
+        },
+        headers=headers,
     )
 
 
 @app.exception_handler(HTTPException)
 async def http_error_handler(request: Request, exc: HTTPException):
+    trace_id = getattr(request.state, "trace_id", str(uuid.uuid4()))
+    headers = _cors_headers(request)
+    headers["X-Trace-ID"] = trace_id
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error_code": "http_error",
             "message": str(exc.detail),
-            "trace_id": getattr(request.state, "trace_id", str(uuid.uuid4())),
+            "trace_id": trace_id,
         },
+        headers=headers,
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.exception("unhandled_server_exception", exc_info=exc)
+    trace_id = getattr(request.state, "trace_id", str(uuid.uuid4()))
+    headers = _cors_headers(request)
+    headers["X-Trace-ID"] = trace_id
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error_code": "internal_error",
+            "message": "Internal server error",
+            "detail": str(exc),
+            "trace_id": trace_id,
+        },
+        headers=headers,
     )
 
 
@@ -77,10 +136,30 @@ async def request_middleware(request: Request, call_next):
     request.state.trace_id = trace_id
     started = time.perf_counter()
     try:
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            logger.exception("middleware_unhandled_exception", exc_info=exc)
+            headers = _cors_headers(request)
+            headers["X-Trace-ID"] = trace_id
+            response = JSONResponse(
+                status_code=500,
+                content={
+                    "error_code": "internal_error",
+                    "message": "Internal server error",
+                    "detail": str(exc),
+                    "trace_id": trace_id,
+                },
+                headers=headers,
+            )
+
         duration = time.perf_counter() - started
-        request_count.labels(request.method, request.url.path, str(response.status_code)).inc()
-        request_duration.labels(request.method, request.url.path).observe(duration)
+        try:
+            request_count.labels(request.method, request.url.path, str(response.status_code)).inc()
+            request_duration.labels(request.method, request.url.path).observe(duration)
+        except Exception:
+            pass
+
         response.headers["X-Trace-ID"] = trace_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -93,9 +172,11 @@ async def request_middleware(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 from app.api.endpoints import auth

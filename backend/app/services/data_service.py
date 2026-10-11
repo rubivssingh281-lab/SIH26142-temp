@@ -52,7 +52,7 @@ CLUSTER = {
 }
 
 QUEUE_JOBS = [
-    {"job_id": "SR_v2_20240521_0900", "project": "Ladakh Border Infra", "status": "inference", "date": "21 May 2024",
+    {"job_id": "SR_v2_20240521_0900", "project": "Ladakh Border Infra", "status": "processing", "date": "21 May 2024",
      "resolution_gain": "4x", "progress": 64, "compute_node": "GPU-Node-03", "gpu": "A100 40GB",
      "started": "21 May 2024 09:00 AM", "eta": "21 May 2024 11:15 AM", "lr_thumb": "ladakh-01", "sr_thumb": "ladakh-01",
      "tiles_processed": 1248, "tiles_total": 1952, "throughput_mbps": 312,
@@ -60,7 +60,7 @@ QUEUE_JOBS = [
                 {"name": "Model Inference", "state": "in_progress", "detail": "In Progress", "progress": 64},
                 {"name": "Post-processing", "state": "pending", "detail": "Pending"},
                 {"name": "Validation", "state": "pending", "detail": "Pending"}]},
-    {"job_id": "SR_v2_20240521_0745", "project": "Arunachal Outposts", "status": "done", "date": "21 May 2024",
+    {"job_id": "SR_v2_20240521_0745", "project": "Arunachal Outposts", "status": "completed", "date": "21 May 2024",
      "resolution_gain": "4x", "progress": 100, "compute_node": "GPU-Node-01", "gpu": "A100 40GB",
      "started": "21 May 2024 07:45 AM", "eta": "21 May 2024 09:20 AM", "lr_thumb": "arunachal-01", "sr_thumb": "arunachal-01",
      "tiles_processed": 1880, "tiles_total": 1880, "throughput_mbps": 340, "stages": []},

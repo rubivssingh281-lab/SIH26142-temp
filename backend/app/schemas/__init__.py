@@ -4,10 +4,12 @@ from pydantic import BaseModel, Field
 class JobStatus(str, Enum):
     created = "created"
     queued = "queued"
+    processing = "processing"
     preprocessing = "preprocessing"
     inference = "inference"
     postprocessing = "postprocessing"
     validation = "validation"
+    completed = "completed"
     done = "done"
     failed = "failed"
 

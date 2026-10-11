@@ -31,15 +31,52 @@ function url(path: string): string {
 }
 
 async function get<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url(path), {
-    cache: "no-store",
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-  if (!res.ok) {
-    throw new Error(`API ${res.status} ${res.statusText} for ${path}`);
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const targetUrl = url(p);
+
+  try {
+    const res = await fetch(targetUrl, {
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      ...init,
+    });
+    if (!res.ok) {
+      if (BASE) {
+        console.warn(`[भू DRISTI] Remote API ${targetUrl} returned HTTP ${res.status}. Falling back to built-in local API: /api${p}`);
+        try {
+          const localRes = await fetch(`/api${p}`, {
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            ...init,
+          });
+          if (localRes.ok) {
+            return (await localRes.json()) as T;
+          }
+        } catch {
+          // ignore fallback error and throw below
+        }
+      }
+      throw new Error(`API ${res.status} ${res.statusText} for ${path}`);
+    }
+    return (await res.json()) as T;
+  } catch (err) {
+    if (BASE) {
+      console.warn(`[भू DRISTI] Remote API ${targetUrl} unreachable (${err}). Falling back to built-in local API: /api${p}`);
+      try {
+        const localRes = await fetch(`/api${p}`, {
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          ...init,
+        });
+        if (localRes.ok) {
+          return (await localRes.json()) as T;
+        }
+      } catch {
+        // ignore fallback error and throw below
+      }
+    }
+    throw err;
   }
-  return (await res.json()) as T;
 }
 
 export const api = {
