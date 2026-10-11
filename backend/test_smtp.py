@@ -1,31 +1,57 @@
 import os
-import smtplib
-from email.message import EmailMessage
+import sys
+import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Load credentials from .env
-load_dotenv()
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL")
+# Ensure backend root is on sys.path
+backend_dir = Path(__file__).resolve().parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
 
-print(f"Testing SMTP connection to {SMTP_HOST}:{SMTP_PORT} with user {SMTP_USER}...")
+load_dotenv(backend_dir / ".env")
 
-msg = EmailMessage()
-msg.set_content("This is a test email to verify your SMTP configuration for the Bhu-Dristi prototype.")
-msg["Subject"] = "SMTP Test Verification - Bhu-Dristi"
-msg["From"] = SMTP_FROM_EMAIL
-msg["To"] = SMTP_USER  # Send it to yourself
+from app.core.config import settings
+from app.services.email_service import (
+    render_otp_email_html,
+    render_otp_email_text,
+    send_styled_otp_email,
+)
+
+print("=" * 60)
+print("🛰️  भू DRISTI — SMTP & Styled Email Dispatch Diagnostic")
+print("=" * 60)
+print(f"SMTP Server: {settings.SMTP_HOST}:{settings.SMTP_PORT}")
+print(f"User:        {settings.SMTP_USER}")
+print(f"From Email:  {settings.SMTP_FROM_EMAIL}")
+print("=" * 60)
+
+test_code = "849201"
+recipient = settings.SMTP_USER or "bhudhristi@gmail.com"
+
+# 1. Generate & export an offline HTML preview
+preview_file = backend_dir / "email_preview.html"
+html_content = render_otp_email_html(recipient, test_code, purpose="login")
+with open(preview_file, "w", encoding="utf-8") as f:
+    f.write(html_content)
+print(f"✅ Generated local HTML preview file: {preview_file}")
+
+# 2. Dispatch real email via SMTP
+print(f"\n📡 Dispatching Bhu-Dristi styled email with OTP [{test_code}] to {recipient}...")
 
 try:
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.send_message(msg)
-    print("\n✅ SUCCESS: Test email sent successfully! Your credentials are correct.")
+    send_styled_otp_email(email=recipient, code=test_code, purpose="login")
+    print(f"\n🎉 SUCCESS: Bhu-Dristi styled verification email delivered successfully!")
+    print(f"   Recipient: {recipient}")
+    print(f"   Subject:   भू DRISTI — Verification Code [{test_code}]")
+    print("   Check your inbox now to admire the new responsive satellite theme.\n")
 except Exception as e:
-    print(f"\n❌ ERROR: Failed to send email.")
+    print(f"\n❌ ERROR: Failed to dispatch styled email.")
     print(f"Details: {e}")
+    sys.exit(1)

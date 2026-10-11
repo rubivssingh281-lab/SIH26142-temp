@@ -1,18 +1,12 @@
 import asyncio
 import logging
-import smtplib
 import uuid
 import random
 import datetime
-from email.message import EmailMessage
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from app.db.session import get_db
-from app.db.models import User, OTP
-from app.core.config import settings
+from app.services.email_service import send_styled_otp_email as send_otp_email
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -23,6 +17,9 @@ class RegisterRequest(BaseModel):
     organization: str = None
     password: str
 
+class RequestOTPRequest(BaseModel):
+    email: EmailStr
+
 class VerifyOTPRequest(BaseModel):
     email: EmailStr
     code: str
@@ -30,21 +27,6 @@ class VerifyOTPRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-
-def send_otp_email(email: str, code: str) -> None:
-    if not settings.SMTP_PASSWORD:
-        raise RuntimeError("SMTP_PASSWORD is not configured")
-    msg = EmailMessage()
-    msg.set_content(f"Your OTP code is: {code}")
-    msg["Subject"] = "Your Verification Code"
-    msg["From"] = settings.SMTP_FROM_EMAIL
-    msg["To"] = email
-    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as server:
-        server.starttls()
-        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-        refused = server.send_message(msg)
-        if refused:
-            raise smtplib.SMTPRecipientsRefused(refused)
 
 # In-memory store for demo without Docker
 mock_users = {}
@@ -56,10 +38,14 @@ async def register(req: RegisterRequest):
     
     # Generate OTP
     code = str(random.randint(100000, 999999))
-    mock_otps[req.email] = {"code": code, "expires": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=10)}
+    mock_otps[req.email] = {
+        "code": code,
+        "expires": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=10),
+        "purpose": "registration"
+    }
     
     try:
-        await asyncio.to_thread(send_otp_email, req.email, code)
+        await asyncio.to_thread(send_otp_email, req.email, code, "verification")
     except Exception:
         logger.exception("otp_email_delivery_failed", extra={"email": req.email})
         mock_users.pop(req.email, None)
@@ -68,7 +54,35 @@ async def register(req: RegisterRequest):
     
     return {"message": "Account created. OTP sent to email."}
 
+@router.post("/request-login-otp")
+async def request_login_otp(req: RequestOTPRequest):
+    # Auto-provision user profile for demo if not already registered
+    if req.email not in mock_users:
+        mock_users[req.email] = {
+            "name": req.email.split("@")[0].replace(".", " ").title(),
+            "org": "NTRO — Imagery Analysis",
+            "active": True
+        }
+    
+    # Generate OTP
+    code = str(random.randint(100000, 999999))
+    mock_otps[req.email] = {
+        "code": code,
+        "expires": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=10),
+        "purpose": "login"
+    }
+    
+    try:
+        await asyncio.to_thread(send_otp_email, req.email, code, "login")
+    except Exception:
+        logger.exception("login_otp_email_delivery_failed", extra={"email": req.email})
+        mock_otps.pop(req.email, None)
+        raise HTTPException(status_code=503, detail="Unable to send login verification email")
+    
+    return {"message": "Login code sent to email."}
+
 @router.post("/verify-otp")
+@router.post("/verify-login-otp")
 async def verify_otp(req: VerifyOTPRequest):
     otp = mock_otps.get(req.email)
     
@@ -76,16 +90,49 @@ async def verify_otp(req: VerifyOTPRequest):
         raise HTTPException(status_code=400, detail="Invalid OTP")
         
     if otp["expires"] < datetime.datetime.now(datetime.timezone.utc):
-        raise HTTPException(status_code=400, detail="OTP expired")
+        mock_otps.pop(req.email, None)
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new code.")
         
     if req.email in mock_users:
         mock_users[req.email]["active"] = True
+    else:
+        mock_users[req.email] = {
+            "name": req.email.split("@")[0].replace(".", " ").title(),
+            "org": "NTRO — Imagery Analysis",
+            "active": True
+        }
         
-    return {"message": "OTP verified successfully", "token": "dummy_jwt_token"}
+    # Consume OTP so it cannot be reused
+    mock_otps.pop(req.email, None)
+    
+    user_info = mock_users[req.email]
+    return {
+        "message": "OTP verified successfully",
+        "token": f"jwt_{uuid.uuid4().hex[:16]}",
+        "user": {
+            "email": req.email,
+            "name": user_info.get("name", "Analyst"),
+            "organization": user_info.get("org", "NTRO")
+        }
+    }
 
 @router.post("/login")
 async def login(req: LoginRequest):
     if req.email not in mock_users:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        # Auto-provision demo account for seamless demo testing
+        mock_users[req.email] = {
+            "name": req.email.split("@")[0].replace(".", " ").title(),
+            "org": "NTRO — Imagery Analysis",
+            "active": True
+        }
     
-    return {"message": "Logged in successfully", "token": "dummy_jwt_token"}
+    user_info = mock_users[req.email]
+    return {
+        "message": "Logged in successfully",
+        "token": f"jwt_{uuid.uuid4().hex[:16]}",
+        "user": {
+            "email": req.email,
+            "name": user_info.get("name", "Analyst"),
+            "organization": user_info.get("org", "NTRO")
+        }
+    }

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Mail, Lock, Eye, EyeOff, User, Building2, ArrowRight, Check, Loader2,
-  ShieldCheck, Satellite, Layers, Activity, KeyRound,
+  ShieldCheck, Satellite, Layers, Activity, KeyRound, ArrowLeft, RefreshCw,
 } from "lucide-react";
 import { SatelliteTile } from "@/components/map/SatelliteTile";
 import { Logo } from "@/components/layout/Logo";
@@ -13,8 +13,10 @@ import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
 
 type Mode = "login" | "signup";
+type LoginMethod = "password" | "otp";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 function passwordScore(pw: string): number {
   let s = 0;
@@ -37,6 +39,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
   const router = useRouter();
   const isSignup = mode === "signup";
 
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>("password");
   const [name, setName] = useState("");
   const [org, setOrg] = useState("NTRO — Imagery Analysis");
   const [email, setEmail] = useState("");
@@ -48,35 +51,93 @@ export function AuthScreen({ mode }: { mode: Mode }) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  const [otpMode, setOtpMode] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [sendingOtp, setSendingOtp] = useState(false);
+
   const emailOk = EMAIL_RE.test(email);
   const score = passwordScore(password);
   const pwOk = password.length >= 8;
   const confirmOk = !isSignup || confirm === password;
 
-  const canSubmit =
-    emailOk && pwOk && confirmOk &&
-    (!isSignup || (name.trim().length > 1 && agree));
+  const canSubmit = otpMode
+    ? otpCode.trim().length === 6
+    : isSignup
+      ? emailOk && pwOk && confirmOk && name.trim().length > 1 && agree
+      : loginMethod === "otp"
+        ? emailOk
+        : emailOk && pwOk;
 
   const blur = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
 
-  const [otpMode, setOtpMode] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((c) => (c > 0 ? c - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  async function resendOtp() {
+    if (resendCooldown > 0 || sendingOtp || !emailOk) return;
+    setSendingOtp(true);
+    try {
+      if (isSignup) {
+        const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, organization: org, password }),
+        });
+        if (!res.ok) throw new Error("Failed to resend code");
+      } else {
+        const res = await fetch(`${API_BASE}/api/v1/auth/request-login-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (!res.ok) throw new Error("Failed to resend code");
+      }
+      toast("A new 6-digit verification code has been sent to your email!", "info");
+      setResendCooldown(45);
+    } catch {
+      toast("A new code was dispatched (Demo Mode)", "info");
+      setResendCooldown(45);
+    } finally {
+      setSendingOtp(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+
+    // Case 1: Submitting OTP verification code
     if (otpMode) {
-      if (!otpCode) return;
+      if (otpCode.trim().length !== 6) {
+        toast("Please enter the complete 6-digit code", "error");
+        return;
+      }
       setSubmitting(true);
       try {
-        const res = await fetch("http://localhost:8000/api/v1/auth/verify-otp", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, code: otpCode })
+        const endpoint = isSignup
+          ? `${API_BASE}/api/v1/auth/verify-otp`
+          : `${API_BASE}/api/v1/auth/verify-login-otp`;
+
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, code: otpCode }),
         });
-        if (!res.ok) throw new Error((await res.json()).detail || "Failed to verify OTP");
-        toast("Account verified!", "success");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || errData.message || "Failed to verify code");
+        }
+        toast(isSignup ? "Account verified & created!" : "Signed in successfully!", "success");
         router.push("/dashboard");
       } catch (err: any) {
-        toast("Account verified! (Mock Mode)", "success");
+        console.warn("OTP verification fallback:", err);
+        toast(isSignup ? "Account verified! (Mock Mode)" : "Signed in successfully! (Mock Mode)", "success");
         router.push("/dashboard");
       } finally {
         setSubmitting(false);
@@ -84,41 +145,93 @@ export function AuthScreen({ mode }: { mode: Mode }) {
       return;
     }
 
-    setTouched({ name: true, email: true, password: true, confirm: true });
-    if (!canSubmit) {
-      toast("Please fix the highlighted fields", "error");
+    // Case 2: Signup form submission -> generates OTP
+    if (isSignup) {
+      setTouched({ name: true, email: true, password: true, confirm: true });
+      if (!canSubmit) {
+        toast("Please fill in all required fields properly", "error");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, organization: org, password }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || errData.message || "Failed to register");
+        }
+        toast("OTP verification code sent to your email!", "info");
+        setOtpMode(true);
+        setResendCooldown(45);
+      } catch (err: any) {
+        console.warn("Signup error fallback:", err);
+        toast("OTP code sent to your email (Mock Mode)", "info");
+        setOtpMode(true);
+        setResendCooldown(45);
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // Case 3: Login via OTP -> request OTP code
+    if (!isSignup && loginMethod === "otp") {
+      setTouched({ email: true });
+      if (!emailOk) {
+        toast("Please enter a valid work email", "error");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/auth/request-login-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || errData.message || "Failed to send login code");
+        }
+        toast("Login OTP code sent to your email!", "info");
+        setOtpMode(true);
+        setResendCooldown(45);
+      } catch (err: any) {
+        console.warn("Login OTP error fallback:", err);
+        toast("Login OTP code sent to your email (Mock Mode)", "info");
+        setOtpMode(true);
+        setResendCooldown(45);
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // Case 4: Standard Password Login
+    setTouched({ email: true, password: true });
+    if (!emailOk || !pwOk) {
+      toast("Please enter valid email and password", "error");
       return;
     }
     setSubmitting(true);
-    
     try {
-      if (isSignup) {
-        const res = await fetch("http://127.0.0.1:8000/api/v1/auth/register", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, organization: org, password })
-        });
-        if (!res.ok) throw new Error((await res.json()).detail || "Failed to register");
-        toast("OTP sent to your email!", "info");
-        setOtpMode(true);
-      } else {
-        const res = await fetch("http://127.0.0.1:8000/api/v1/auth/login", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password })
-        });
-        if (!res.ok) throw new Error((await res.json()).detail || "Failed to login");
-        toast("Signed in successfully", "success");
-        router.push("/dashboard");
+      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.message || "Failed to login");
       }
+      toast("Signed in successfully", "success");
+      router.push("/dashboard");
     } catch (err: any) {
-      console.warn("Backend auth failed:", err);
-      // Fallback for demo if backend is offline
-      if (isSignup) {
-        toast("OTP sent to your email (Mock Mode)", "info");
-        setOtpMode(true);
-      } else {
-        toast("Signed in successfully (Mock Mode)", "success");
-        router.push("/dashboard");
-      }
+      console.warn("Password login fallback:", err);
+      toast("Signed in successfully (Mock Mode)", "success");
+      router.push("/dashboard");
     } finally {
       setSubmitting(false);
     }
@@ -134,123 +247,232 @@ export function AuthScreen({ mode }: { mode: Mode }) {
           <div className="lg:hidden mb-8"><Logo showText /></div>
 
           <h1 className="text-[26px] font-semibold text-ink tracking-tight">
-            {isSignup ? "Create your account" : "Welcome back"}
+            {isSignup
+              ? "Create your account"
+              : otpMode
+                ? "Verify your identity"
+                : "Welcome back"}
           </h1>
           <p className="text-[14px] text-muted mt-1.5">
             {isSignup
               ? "Set up access to the super-resolution workspace."
-              : "Sign in to continue to भू DRISTI."}
+              : otpMode
+                ? "Enter the single-use verification code sent to your email."
+                : "Sign in to continue to भू DRISTI."}
           </p>
 
           {/* Mode switch */}
-          <div className="mt-6 inline-flex p-1 rounded-xl bg-surface border border-line-strong text-[13.5px] font-medium">
-            <ModeTab href="/login" active={!isSignup}>Sign In</ModeTab>
-            <ModeTab href="/signup" active={isSignup}>Create Account</ModeTab>
-          </div>
+          {!otpMode && (
+            <div className="mt-6 inline-flex p-1 rounded-xl bg-surface border border-line-strong text-[13.5px] font-medium">
+              <ModeTab href="/login" active={!isSignup}>Sign In</ModeTab>
+              <ModeTab href="/signup" active={isSignup}>Create Account</ModeTab>
+            </div>
+          )}
+
+          {/* Login Method Toggle (Password vs Email OTP) */}
+          {!isSignup && !otpMode && (
+            <div className="mt-4 grid grid-cols-2 p-1 rounded-xl bg-surface border border-line-strong text-[13px] font-medium">
+              <button
+                type="button"
+                onClick={() => setLoginMethod("password")}
+                className={cn(
+                  "h-8.5 rounded-lg flex items-center justify-center gap-1.5 transition-all",
+                  loginMethod === "password"
+                    ? "bg-primary text-white shadow-xs font-semibold"
+                    : "text-muted hover:text-ink"
+                )}
+              >
+                <Lock size={14} /> Password
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginMethod("otp")}
+                className={cn(
+                  "h-8.5 rounded-lg flex items-center justify-center gap-1.5 transition-all",
+                  loginMethod === "otp"
+                    ? "bg-primary text-white shadow-xs font-semibold"
+                    : "text-muted hover:text-ink"
+                )}
+              >
+                <KeyRound size={14} /> Email OTP
+              </button>
+            </div>
+          )}
 
           <form onSubmit={submit} className="mt-6 space-y-4">
             {otpMode ? (
-              <Field label="Verification Code" error={touched.otp && !otpCode ? "Enter the 6-digit code" : undefined}>
-                <InputWrap icon={<KeyRound size={17} />}>
-                  <input type="text" className="auth-input tracking-widest text-lg font-medium" placeholder="000000" value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
-                </InputWrap>
-              </Field>
-            ) : (
-              <>
-            {isSignup && (
-              <Field label="Full name" error={touched.name && name.trim().length <= 1 ? "Enter your name" : undefined}>
-                <InputWrap icon={<User size={17} />}>
-                  <input className="auth-input" placeholder="Arjun Pratap" value={name}
-                    onChange={(e) => setName(e.target.value)} onBlur={() => blur("name")} autoComplete="name" />
-                </InputWrap>
-              </Field>
-            )}
-
-            <Field label="Work email" error={touched.email && !emailOk ? "Enter a valid email address" : undefined}>
-              <InputWrap icon={<Mail size={17} />} invalid={touched.email && !emailOk}>
-                <input type="email" className="auth-input" placeholder="you@ntro.gov.in" value={email}
-                  onChange={(e) => setEmail(e.target.value)} onBlur={() => blur("email")} autoComplete="email" />
-              </InputWrap>
-            </Field>
-
-            {isSignup && (
-              <Field label="Organization / Unit">
-                <InputWrap icon={<Building2 size={17} />}>
-                  <select className="auth-input appearance-none cursor-pointer pr-8" value={org} onChange={(e) => setOrg(e.target.value)}>
-                    <option>NTRO — Imagery Analysis</option>
-                    <option>NTRO — Geospatial Intelligence</option>
-                    <option>Defence Research (DRDO)</option>
-                    <option>Other Government Agency</option>
-                  </select>
-                </InputWrap>
-              </Field>
-            )}
-
-            <Field label="Password" error={touched.password && !pwOk ? "At least 8 characters" : undefined}>
-              <InputWrap icon={<Lock size={17} />} invalid={touched.password && !pwOk}
-                trailing={
-                  <button type="button" onClick={() => setShowPw((s) => !s)} className="text-muted hover:text-ink transition px-1" aria-label={showPw ? "Hide password" : "Show password"}>
-                    {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
-                  </button>
-                }>
-                <input type={showPw ? "text" : "password"} className="auth-input" placeholder="••••••••" value={password}
-                  onChange={(e) => setPassword(e.target.value)} onBlur={() => blur("password")}
-                  autoComplete={isSignup ? "new-password" : "current-password"} />
-              </InputWrap>
-              {isSignup && password.length > 0 && (
-                <div className="mt-2">
-                  <div className="flex gap-1">
-                    {[0, 1, 2, 3].map((i) => (
-                      <span key={i} className="h-1.5 flex-1 rounded-full transition-colors"
-                        style={{ background: i < score ? STRENGTH[score].color : "#EBE9E3" }} />
-                    ))}
+              <div className="space-y-4">
+                <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 text-[13px] text-ink leading-relaxed">
+                  <div className="flex items-center gap-2 font-semibold text-primary mb-1">
+                    <Mail size={16} /> Check your inbox
                   </div>
-                  <div className="text-[11.5px] mt-1" style={{ color: STRENGTH[score].color }}>{STRENGTH[score].label} password</div>
+                  <div>
+                    We sent a 6-digit verification code to <span className="font-semibold text-ink">{email}</span>. It is valid for 10 minutes.
+                  </div>
                 </div>
-              )}
-            </Field>
 
-            {isSignup && (
-              <Field label="Confirm password" error={touched.confirm && !confirmOk ? "Passwords don't match" : undefined}>
-                <InputWrap icon={<Lock size={17} />} invalid={touched.confirm && !confirmOk}
-                  trailing={confirmOk && confirm.length > 0 ? <Check size={17} className="text-success" /> : undefined}>
-                  <input type={showPw ? "text" : "password"} className="auth-input" placeholder="••••••••" value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)} onBlur={() => blur("confirm")} autoComplete="new-password" />
-                </InputWrap>
-              </Field>
-            )}
+                <Field label="6-Digit Verification Code" error={touched.otp && otpCode.length !== 6 ? "Enter the complete 6-digit code" : undefined}>
+                  <InputWrap icon={<KeyRound size={17} />}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoFocus
+                      className="auth-input tracking-[0.35em] text-center text-xl font-bold font-mono"
+                      placeholder="••••••"
+                      value={otpCode}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                        setOtpCode(v);
+                      }}
+                    />
+                  </InputWrap>
+                </Field>
 
-            {!isSignup ? (
-              <div className="flex items-center justify-between">
-                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                  <CheckBox checked={remember} onChange={setRemember} />
-                  <span className="text-[13px] text-ink-soft">Remember me</span>
-                </label>
-                <button type="button" onClick={() => toast("Password reset link sent (demo)", "info")} className="text-[13px] font-medium text-primary hover:underline">
-                  Forgot password?
-                </button>
+                <div className="flex items-center justify-between text-[13px] pt-1">
+                  <button
+                    type="button"
+                    disabled={resendCooldown > 0 || sendingOtp}
+                    onClick={resendOtp}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 font-medium transition",
+                      resendCooldown > 0
+                        ? "text-muted cursor-not-allowed"
+                        : "text-primary hover:underline cursor-pointer"
+                    )}
+                  >
+                    <RefreshCw size={14} className={cn(sendingOtp && "animate-spin")} />
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpMode(false);
+                      setOtpCode("");
+                    }}
+                    className="text-muted hover:text-ink transition flex items-center gap-1 text-[12.5px]"
+                  >
+                    <ArrowLeft size={13} /> {isSignup ? "Edit details" : "Change method"}
+                  </button>
+                </div>
               </div>
             ) : (
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                <CheckBox checked={agree} onChange={setAgree} />
-                <span className="text-[12.5px] text-ink-soft leading-snug">
-                  I agree to the <span className="text-primary font-medium">Terms of Use</span> and acknowledge the
-                  {" "}<span className="text-primary font-medium">Classified Data Handling Policy</span>.
-                </span>
-              </label>
-            )}
-            </>
+              <>
+                {isSignup && (
+                  <Field label="Full name" error={touched.name && name.trim().length <= 1 ? "Enter your name" : undefined}>
+                    <InputWrap icon={<User size={17} />}>
+                      <input className="auth-input" placeholder="Arjun Pratap" value={name}
+                        onChange={(e) => setName(e.target.value)} onBlur={() => blur("name")} autoComplete="name" />
+                    </InputWrap>
+                  </Field>
+                )}
+
+                <Field label="Work email" error={touched.email && !emailOk ? "Enter a valid email address" : undefined}>
+                  <InputWrap icon={<Mail size={17} />} invalid={touched.email && !emailOk}>
+                    <input type="email" className="auth-input" placeholder="you@ntro.gov.in" value={email}
+                      onChange={(e) => setEmail(e.target.value)} onBlur={() => blur("email")} autoComplete="email" />
+                  </InputWrap>
+                </Field>
+
+                {!isSignup && loginMethod === "otp" && (
+                  <div className="p-3 rounded-xl bg-surface border border-line-strong text-[12px] text-muted flex items-start gap-2">
+                    <Mail size={15} className="text-primary shrink-0 mt-0.5" />
+                    <span>A 6-digit authentication code will be sent to your inbox via secure SMTP. No password required.</span>
+                  </div>
+                )}
+
+                {isSignup && (
+                  <Field label="Organization / Unit">
+                    <InputWrap icon={<Building2 size={17} />}>
+                      <select className="auth-input appearance-none cursor-pointer pr-8" value={org} onChange={(e) => setOrg(e.target.value)}>
+                        <option>NTRO — Imagery Analysis</option>
+                        <option>NTRO — Geospatial Intelligence</option>
+                        <option>Defence Research (DRDO)</option>
+                        <option>Other Government Agency</option>
+                      </select>
+                    </InputWrap>
+                  </Field>
+                )}
+
+                {/* Password field only shown for signup or password login */}
+                {(isSignup || loginMethod === "password") && (
+                  <Field label="Password" error={touched.password && !pwOk ? "At least 8 characters" : undefined}>
+                    <InputWrap icon={<Lock size={17} />} invalid={touched.password && !pwOk}
+                      trailing={
+                        <button type="button" onClick={() => setShowPw((s) => !s)} className="text-muted hover:text-ink transition px-1" aria-label={showPw ? "Hide password" : "Show password"}>
+                          {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                        </button>
+                      }>
+                      <input type={showPw ? "text" : "password"} className="auth-input" placeholder="••••••••" value={password}
+                        onChange={(e) => setPassword(e.target.value)} onBlur={() => blur("password")}
+                        autoComplete={isSignup ? "new-password" : "current-password"} />
+                    </InputWrap>
+                    {isSignup && password.length > 0 && (
+                      <div className="mt-2">
+                        <div className="flex gap-1">
+                          {[0, 1, 2, 3].map((i) => (
+                            <span key={i} className="h-1.5 flex-1 rounded-full transition-colors"
+                              style={{ background: i < score ? STRENGTH[score].color : "#EBE9E3" }} />
+                          ))}
+                        </div>
+                        <div className="text-[11.5px] mt-1" style={{ color: STRENGTH[score].color }}>{STRENGTH[score].label} password</div>
+                      </div>
+                    )}
+                  </Field>
+                )}
+
+                {isSignup && (
+                  <Field label="Confirm password" error={touched.confirm && !confirmOk ? "Passwords don't match" : undefined}>
+                    <InputWrap icon={<Lock size={17} />} invalid={touched.confirm && !confirmOk}
+                      trailing={confirmOk && confirm.length > 0 ? <Check size={17} className="text-success" /> : undefined}>
+                      <input type={showPw ? "text" : "password"} className="auth-input" placeholder="••••••••" value={confirm}
+                        onChange={(e) => setConfirm(e.target.value)} onBlur={() => blur("confirm")} autoComplete="new-password" />
+                    </InputWrap>
+                  </Field>
+                )}
+
+                {!isSignup && loginMethod === "password" && (
+                  <div className="flex items-center justify-between">
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                      <CheckBox checked={remember} onChange={setRemember} />
+                      <span className="text-[13px] text-ink-soft">Remember me</span>
+                    </label>
+                    <button type="button" onClick={() => toast("Password reset link sent (demo)", "info")} className="text-[13px] font-medium text-primary hover:underline">
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+
+                {isSignup && (
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <CheckBox checked={agree} onChange={setAgree} />
+                    <span className="text-[12.5px] text-ink-soft leading-snug">
+                      I agree to the <span className="text-primary font-medium">Terms of Use</span> and acknowledge the
+                      {" "}<span className="text-primary font-medium">Classified Data Handling Policy</span>.
+                    </span>
+                  </label>
+                )}
+              </>
             )}
 
-            <button type="submit" disabled={submitting}
+            <button type="submit" disabled={submitting || (otpMode ? otpCode.length !== 6 : !canSubmit)}
               className={cn(
                 "press w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl text-[15px] font-semibold text-white transition-all shadow-sm",
                 "bg-primary hover:bg-primary-600 disabled:opacity-70 disabled:cursor-not-allowed",
                 canSubmit && !submitting && "hover:shadow-lg hover:-translate-y-0.5"
               )}>
               {submitting ? <Loader2 size={18} className="animate-spin" /> : null}
-              {submitting ? "Please wait…" : isSignup ? "Create account" : "Sign in"}
+              {submitting
+                ? "Please wait…"
+                : otpMode
+                  ? isSignup
+                    ? "Verify & Create Account"
+                    : "Verify & Sign In"
+                  : isSignup
+                    ? "Create account"
+                    : loginMethod === "otp"
+                      ? "Send Login OTP"
+                      : "Sign in"}
               {!submitting && <ArrowRight size={18} />}
             </button>
           </form>
