@@ -13,5 +13,7 @@ def get_settings():
 
 @router.put("/settings", response_model=SettingsResponse)
 async def put_settings(body: dict):
-    _settings.update({k: v for k, v in body.items() if k in _settings})
+    # Update known and extended fields
+    for k, v in body.items():
+        _settings[k] = v
     return _settings

@@ -18,6 +18,22 @@ RGB = Tuple[float, float, float]
 
 
 def _esc(s: str) -> str:
+    replacements = {
+        "≥": ">=",
+        "≤": "<=",
+        "≠": "!=",
+        "°": " deg",
+        "×": "x",
+        "→": "->",
+        "←": "<-",
+        "—": "-",
+        "–": "-",
+        "•": "*",
+        "…": "...",
+    }
+    for orig, repl in replacements.items():
+        s = s.replace(orig, repl)
+    s = s.encode("latin-1", "replace").decode("latin-1")
     return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 

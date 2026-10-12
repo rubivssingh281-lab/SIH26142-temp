@@ -117,9 +117,16 @@ export const api = {
     get<NewJobEstimate>("/jobs/estimate", { method: "POST", body: JSON.stringify(body) }),
 
   submitJob: (body: NewJobPayload) =>
-    get<{ job_id: string; status: string }>("/jobs", { method: "POST", body: JSON.stringify(body) }),
+    get<{ job_id: string; status: string; submitted?: string }>("/jobs", { method: "POST", body: JSON.stringify(body) }),
 
-  /** Downloadable report/document URLs (served as application/pdf). */
+  jobs: {
+    simulateComplete: (jobId: string) =>
+      get<{ status: string; job: any }>(`/jobs/${encodeURIComponent(jobId)}/simulate-complete`, { method: "POST" }),
+    cancel: (jobId: string) =>
+      get<{ status: string }>(`/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }),
+  },
+
+  /** Downloadable report/document URLs (served as application/pdf) and SMTP email delivery. */
   reports: {
     validation: (jobId: string) => url(`/reports/validation/${encodeURIComponent(jobId)}`),
     comparison: (jobId: string) => url(`/reports/comparison/${encodeURIComponent(jobId)}`),
@@ -131,5 +138,41 @@ export const api = {
       const qs = s.toString();
       return url(`/reports/invoice/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`);
     },
+    email: (
+      reportType: "validation" | "comparison" | "job" | "invoice",
+      jobId: string,
+      email?: string,
+      extra?: { amount?: number; date?: string }
+    ) =>
+      get<{ status: string; message: string; filename?: string }>(
+        `/reports/${reportType}/${encodeURIComponent(jobId)}/email`,
+        {
+          method: "POST",
+          body: JSON.stringify({ email, ...extra }),
+        }
+      ),
+  },
+
+  /** Notifications service — live alerts, in-app feed, and SMTP channel testing. */
+  notifications: {
+    list: () => get<import("./types").NotificationItem[]>("/notifications"),
+    markRead: (id: string) =>
+      get<{ status: string }>(`/notifications/${encodeURIComponent(id)}/read`, { method: "POST" }),
+    markAllRead: () =>
+      get<{ status: string; message: string }>("/notifications/read-all", { method: "POST" }),
+    dismiss: (id: string) =>
+      get<{ status: string }>(`/notifications/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    sendTest: (email?: string, channel: string = "Email") =>
+      get<{ status: string; message: string; timestamp?: string }>("/notifications/test", {
+        method: "POST",
+        body: JSON.stringify({ email, channel }),
+      }),
+    getSettings: () => get<import("./types").NotificationPreferences>("/notifications/settings"),
+    saveSettings: (preferences: Partial<import("./types").NotificationPreferences>) =>
+      get<{ status: string; preferences: any }>("/notifications/settings", {
+        method: "PUT",
+        body: JSON.stringify(preferences),
+      }),
   },
 };
+

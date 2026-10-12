@@ -47,16 +47,26 @@ export default function DashboardPage() {
 
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <Kpi title="Total Projects" value={stats.total_projects} sub={`${stats.active_projects} active`} icon={<Layers size={22} className="text-primary" />} iconBg="bg-primary-50" />
-        <Kpi title="Total Jobs" value={stats.total_jobs} sub={`${stats.completed_jobs} completed`} icon={<Briefcase size={22} className="text-teal" />} iconBg="bg-teal-50" />
-        <Kpi
-          title="Processing"
-          value={stats.processing_jobs}
-          sub="In queue / running"
-          right={<Donut value={62} size={52} color="#0F8C7F" showLabel={false} />}
-        />
-        <Kpi title="Completed" value={stats.completed_this_month} sub="This month" icon={<CheckCircle2 size={22} className="text-success" />} iconBg="bg-success-bg" />
-        <StorageKpi used={stats.storage_used_tb} total={stats.storage_total_tb} />
+        <Link href="/projects" className="block transition hover:scale-[1.01]">
+          <Kpi title="Total Projects" value={stats.total_projects} sub={`${stats.active_projects} active`} icon={<Layers size={22} className="text-primary" />} iconBg="bg-primary-50" />
+        </Link>
+        <Link href="/queue" className="block transition hover:scale-[1.01]">
+          <Kpi title="Total Jobs" value={stats.total_jobs} sub={`${stats.completed_jobs} completed`} icon={<Briefcase size={22} className="text-teal" />} iconBg="bg-teal-50" />
+        </Link>
+        <Link href="/queue" className="block transition hover:scale-[1.01]">
+          <Kpi
+            title="Processing"
+            value={stats.processing_jobs}
+            sub="In queue / running"
+            right={<Donut value={62} size={52} color="#0F8C7F" showLabel={false} />}
+          />
+        </Link>
+        <Link href="/projects" className="block transition hover:scale-[1.01]">
+          <Kpi title="Completed" value={stats.completed_this_month} sub="This month" icon={<CheckCircle2 size={22} className="text-success" />} iconBg="bg-success-bg" />
+        </Link>
+        <Link href="/settings?tab=billing" className="block transition hover:scale-[1.01]">
+          <StorageKpi used={stats.storage_used_tb} total={stats.storage_total_tb} />
+        </Link>
       </div>
 
       {/* Middle */}
@@ -120,8 +130,16 @@ export default function DashboardPage() {
               <Button className="w-full mb-3"><Plus size={18} /> New Enhancement Job</Button>
             </Link>
             <div className="grid grid-cols-2 gap-3">
-              <Button variant="secondary" className="justify-center"><UploadCloud size={17} /> Upload AOI / Data</Button>
-              <Link href="/projects"><Button variant="secondary" className="w-full justify-center"><FolderPlus size={17} /> Create New Project</Button></Link>
+              <Link href="/upload" className="w-full">
+                <Button variant="secondary" className="w-full justify-center">
+                  <UploadCloud size={17} /> Upload AOI / Data
+                </Button>
+              </Link>
+              <Link href="/projects" className="w-full">
+                <Button variant="secondary" className="w-full justify-center">
+                  <FolderPlus size={17} /> Create New Project
+                </Button>
+              </Link>
             </div>
           </Card>
         </div>
@@ -175,8 +193,12 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {recent_jobs.map((j) => (
-                  <tr key={j.job_id} className="border-b border-line last:border-0">
-                    <td className="py-3 font-medium text-ink whitespace-nowrap">{j.job_id}</td>
+                  <tr key={j.job_id} className="border-b border-line last:border-0 hover:bg-canvas/50 transition">
+                    <td className="py-3 font-medium text-ink whitespace-nowrap">
+                      <Link href={`/comparison?job=${j.job_id}`} className="text-primary hover:underline font-mono">
+                        {j.job_id}
+                      </Link>
+                    </td>
                     <td className="py-3 text-ink-soft">{j.project}</td>
                     <td className="py-3"><StatusBadge status={j.status} plain /></td>
                     <td className="py-3 text-ink-soft whitespace-nowrap">{j.date}</td>

@@ -1,5 +1,16 @@
 from fastapi import APIRouter, Depends
-from app.api.endpoints import dashboard, queue, projects, analysis, settings, jobs, reports, results, exports
+from app.api.endpoints import (
+    dashboard,
+    queue,
+    projects,
+    analysis,
+    settings,
+    jobs,
+    reports,
+    results,
+    exports,
+    notifications,
+)
 from app.core.auth import get_current_principal
 
 api_router = APIRouter(dependencies=[Depends(get_current_principal)])
@@ -12,3 +23,4 @@ api_router.include_router(jobs.router, tags=["jobs"])
 api_router.include_router(reports.router, tags=["reports"])
 api_router.include_router(results.router, tags=["results"])
 api_router.include_router(exports.router, tags=["exports"])
+api_router.include_router(notifications.router, tags=["notifications"])

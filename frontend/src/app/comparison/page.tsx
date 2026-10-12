@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   ChevronDown,
   SlidersHorizontal,
@@ -19,7 +19,7 @@ import { api } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { downloadFile } from "@/lib/download";
 import { toast, updateToast } from "@/components/ui/Toast";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Mail } from "lucide-react";
 import { Card, Toggle } from "@/components/ui/Primitives";
 import { SatelliteTile } from "@/components/map/SatelliteTile";
 import { LoadingState, ErrorState } from "@/components/ui/PageState";
@@ -34,6 +34,7 @@ const VIEW_MODES = [
 
 function ComparisonInner() {
   const params = useSearchParams();
+  const router = useRouter();
   const jobId = params.get("job") ?? "SR_v2_20240520_1030";
   const { data, error, loading } = useFetch(() => api.getComparison(jobId), [jobId]);
 
@@ -46,6 +47,7 @@ function ComparisonInner() {
   const [divider, setDivider] = useState(50);
   const [activeCrop, setActiveCrop] = useState("a01");
   const [exporting, setExporting] = useState(false);
+  const [emailingSnapshot, setEmailingSnapshot] = useState(false);
   const dragging = useRef(false);
   const viewport = useRef<HTMLDivElement>(null);
   const cropStrip = useRef<HTMLDivElement>(null);
@@ -72,6 +74,20 @@ function ComparisonInner() {
     }
   }
 
+  async function emailSnapshot(id: string) {
+    if (emailingSnapshot) return;
+    setEmailingSnapshot(true);
+    const t = toast("Delivering comparison snapshot via SMTP…", "loading");
+    try {
+      const res = await api.reports.email("comparison", id);
+      updateToast(t, res.message || "Comparison snapshot delivered to inbox via SMTP!", "success");
+    } catch (e) {
+      updateToast(t, e instanceof Error ? e.message : "SMTP delivery failed", "error");
+    } finally {
+      setEmailingSnapshot(false);
+    }
+  }
+
   if (loading) return <div className="p-6"><LoadingState /></div>;
   if (error) return <div className="p-6"><ErrorState error={error} /></div>;
   if (!data) return null;
@@ -84,8 +100,14 @@ function ComparisonInner() {
           <div>
             <div className="field-label">Job ID</div>
             <div className="relative">
-              <select className="select w-[240px]" defaultValue={jobId}>
-                <option>{jobId}</option>
+              <select
+                className="select w-[240px]"
+                value={jobId}
+                onChange={(e) => router.push(`/comparison?job=${e.target.value}`)}
+              >
+                <option value={jobId}>{jobId}</option>
+                <option value="SR_v2_20240521_0800">SR_v2_20240521_0800 (Arunachal)</option>
+                <option value="SR_v2_20240521_1145">SR_v2_20240521_1145 (Siachen)</option>
               </select>
               <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             </div>
@@ -126,13 +148,23 @@ function ComparisonInner() {
             </div>
           </div>
 
-          <button
-            onClick={() => exportSnapshot(jobId)}
-            disabled={exporting}
-            className="ml-auto inline-flex items-center gap-2 h-11 px-4 rounded-lg border border-primary text-primary text-[14px] font-medium hover:bg-primary-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <Download size={16} /> {exporting ? "Rendering…" : "Export Snapshot"}
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => emailSnapshot(jobId)}
+              disabled={emailingSnapshot}
+              className="inline-flex items-center gap-2 h-11 px-4 rounded-lg border border-[#0F8C7F] text-[#0F8C7F] text-[14px] font-medium hover:bg-[#0F8C7F]/5 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              title="Deliver comparison snapshot directly to operator email via SMTP"
+            >
+              <Mail size={16} /> {emailingSnapshot ? "Delivering…" : "Email Snapshot (SMTP)"}
+            </button>
+            <button
+              onClick={() => exportSnapshot(jobId)}
+              disabled={exporting}
+              className="inline-flex items-center gap-2 h-11 px-4 rounded-lg bg-primary text-white text-[14px] font-medium hover:bg-primary-hover transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Download size={16} /> {exporting ? "Rendering…" : "Export Snapshot"}
+            </button>
+          </div>
         </div>
       </Card>
 
@@ -263,7 +295,14 @@ function ComparisonInner() {
 
             <div>
               <div className="text-[12.5px] text-ink-soft mb-1.5 flex items-center gap-1">Band Combination <Info size={12} className="text-muted" /></div>
-              <select className="select"><option>Natural Color (RGB)</option><option>False Color (NIR)</option><option>SWIR Composite</option></select>
+              <select
+                className="select"
+                onChange={(e) => toast(`Band combination switched to ${e.target.value}`, "info")}
+              >
+                <option>Natural Color (RGB)</option>
+                <option>False Color (NIR)</option>
+                <option>SWIR Composite</option>
+              </select>
               <div className="text-[11.5px] text-muted mt-1.5">Bands: B4, B3, B2</div>
             </div>
           </Card>
@@ -275,7 +314,21 @@ function ComparisonInner() {
             </div>
             <div className="flex items-center justify-between text-[12.5px] mb-2">
               <span className="text-muted">Coordinate</span>
-              <span className="text-ink font-medium flex items-center gap-1">{data.pixel.coordinate} <Copy size={12} className="text-muted" /></span>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(data.pixel.coordinate);
+                    toast(`Copied coordinates ${data.pixel.coordinate} to clipboard`, "success");
+                  } catch {
+                    toast(data.pixel.coordinate, "info");
+                  }
+                }}
+                className="text-ink font-medium flex items-center gap-1 hover:text-primary transition"
+                title="Click to copy coordinates"
+              >
+                {data.pixel.coordinate} <Copy size={12} className="text-muted" />
+              </button>
             </div>
             <div className="text-[12.5px] text-muted mb-2">Pixel (Super-Resolved)</div>
             <table className="w-full text-[12.5px]">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   Clock,
   Boxes,
@@ -17,6 +18,8 @@ import {
   ChevronRight,
   Check,
   Info,
+  Mail,
+  Play,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
@@ -100,7 +103,7 @@ export default function QueuePage() {
               </thead>
               <tbody>
                 {jobs.map((j, idx) => (
-                  <JobRow key={j.job_id} job={j} expanded={idx === 0 && j.status === "processing"} />
+                  <JobRow key={j.job_id} job={j} expanded={idx === 0 && j.status === "processing"} onRefresh={refetch} />
                 ))}
               </tbody>
             </table>
@@ -144,9 +147,12 @@ export default function QueuePage() {
               </div>
             ))}
           </div>
-          <button className="mt-5 w-full inline-flex items-center justify-center gap-1.5 text-primary text-[13.5px] font-medium">
+          <Link
+            href="/cluster"
+            className="mt-5 w-full inline-flex items-center justify-center gap-1.5 text-primary text-[13.5px] font-medium hover:underline transition"
+          >
             View Cluster Details <ArrowRight size={15} />
-          </button>
+          </Link>
         </Card>
       </div>
     </div>
@@ -163,7 +169,28 @@ async function downloadJob(id: string) {
   }
 }
 
-function JobRow({ job, expanded }: { job: JobDetail; expanded?: boolean }) {
+async function emailJob(id: string) {
+  const t = toast("Delivering job manifest via SMTP…", "loading");
+  try {
+    const res = await api.reports.email("job", id);
+    updateToast(t, res.message || "Job manifest delivered via SMTP!", "success");
+  } catch (e) {
+    updateToast(t, e instanceof Error ? e.message : "SMTP delivery failed", "error");
+  }
+}
+
+async function simulateCompleteJob(id: string, onRefresh?: () => void) {
+  const t = toast("Finalizing inference & dispatching SMTP notification…", "loading");
+  try {
+    await api.jobs.simulateComplete(id);
+    updateToast(t, `Job ${id} completed! Real-time notification dispatched via SMTP.`, "success");
+    onRefresh?.();
+  } catch (e) {
+    updateToast(t, e instanceof Error ? e.message : "Completion failed", "error");
+  }
+}
+
+function JobRow({ job, expanded, onRefresh }: { job: JobDetail; expanded?: boolean; onRefresh?: () => void }) {
   return (
     <>
       <tr className={cn("border-b border-line", expanded && "border-b-0")}>
@@ -179,7 +206,20 @@ function JobRow({ job, expanded }: { job: JobDetail; expanded?: boolean }) {
         <td className="px-2 py-3">
           <div className="flex items-center gap-2">
             <StatusBadge status={job.status} />
-            {job.status === "failed" && <button className="text-[12px] px-2 py-1 rounded border border-line-strong hover:bg-canvas">Retry</button>}
+            {job.status === "failed" && (
+              <button
+                onClick={() => {
+                  toast(`Re-queuing failed job ${job.job_id}…`, "loading");
+                  setTimeout(() => {
+                    toast(`Job ${job.job_id} re-staged at priority rank 1!`, "success");
+                    onRefresh?.();
+                  }, 1200);
+                }}
+                className="text-[12px] px-2 py-1 rounded border border-line-strong hover:bg-canvas text-primary font-medium transition"
+              >
+                Retry
+              </button>
+            )}
           </div>
           {job.status === "processing" && (
             <div className="mt-1.5 flex items-center gap-2 w-[130px]"><ProgressBar value={job.progress ?? 0} /><span className="text-[11px] text-muted">{job.progress}%</span></div>
@@ -189,9 +229,44 @@ function JobRow({ job, expanded }: { job: JobDetail; expanded?: boolean }) {
         <td className="px-2 py-3 text-ink-soft whitespace-nowrap text-[12.5px]">{job.started}</td>
         <td className="px-2 py-3 text-ink-soft whitespace-nowrap text-[12.5px]">{job.eta}</td>
         <td className="px-4 py-3">
-          {job.status === "completed"
-            ? <button title="Download job manifest (PDF)" onClick={() => downloadJob(job.job_id)} className="h-8 w-8 grid place-items-center rounded-md border border-line hover:bg-canvas hover:border-primary/40 hover:text-primary transition"><Download size={15} /></button>
-            : <button title="More actions" className="h-8 w-8 grid place-items-center rounded-md border border-line hover:bg-canvas transition"><MoreHorizontal size={15} /></button>}
+          <div className="flex items-center gap-1.5 justify-end">
+            {job.status === "completed" && (
+              <>
+                <button
+                  title="Deliver job manifest via SMTP"
+                  onClick={() => emailJob(job.job_id)}
+                  className="h-8 w-8 grid place-items-center rounded-md border border-line hover:bg-canvas hover:border-[#0F8C7F]/50 hover:text-[#0F8C7F] transition"
+                >
+                  <Mail size={14} />
+                </button>
+                <button
+                  title="Download job manifest (PDF)"
+                  onClick={() => downloadJob(job.job_id)}
+                  className="h-8 w-8 grid place-items-center rounded-md border border-line hover:bg-canvas hover:border-primary/40 hover:text-primary transition"
+                >
+                  <Download size={14} />
+                </button>
+              </>
+            )}
+            {job.status === "processing" && (
+              <button
+                title="Simulate job completion and trigger SMTP notification"
+                onClick={() => simulateCompleteJob(job.job_id, onRefresh)}
+                className="h-8 px-2 inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-800 text-[11px] font-semibold hover:bg-emerald-100 transition whitespace-nowrap"
+              >
+                <Play size={12} /> Complete &amp; Notify
+              </button>
+            )}
+            {job.status !== "completed" && job.status !== "processing" && (
+              <button
+                title="Download job manifest (PDF)"
+                onClick={() => downloadJob(job.job_id)}
+                className="h-8 w-8 grid place-items-center rounded-md border border-line hover:bg-canvas transition"
+              >
+                <Download size={14} />
+              </button>
+            )}
+          </div>
         </td>
       </tr>
       {expanded && (

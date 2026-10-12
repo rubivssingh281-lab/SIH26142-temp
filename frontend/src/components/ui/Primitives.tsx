@@ -5,8 +5,8 @@ import type { JobStatus, MetricRating } from "@/lib/types";
 import { CheckCircle2, Clock, Loader2, AlertTriangle } from "lucide-react";
 
 /* -------------------------------------------------------------------- Card */
-export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={cn("card", className)}>{children}</div>;
+export function Card({ className, children, onClick }: { className?: string; children: React.ReactNode; onClick?: () => void }) {
+  return <div onClick={onClick} className={cn("card", className)}>{children}</div>;
 }
 
 export function SectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {

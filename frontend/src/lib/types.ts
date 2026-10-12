@@ -291,3 +291,36 @@ export interface CurrentUser {
   role: string;
   initials: string;
 }
+
+/* ------------------------------------------------------------- Notifications */
+
+export interface NotificationItem {
+  id: string;
+  type: "success" | "info" | "warning" | "alert";
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+  href: string;
+  tag?: string;
+}
+
+export interface AlertRule {
+  id: string;
+  label?: string;
+  event?: string;
+  email: boolean;
+  inApp: boolean;
+  sms: boolean;
+}
+
+export interface NotificationPreferences {
+  channels: { email: boolean; inApp: boolean; sms: boolean };
+  jobAlerts: AlertRule[];
+  teamAlerts: AlertRule[];
+  frequency: string;
+  quietHours: boolean;
+  quietStart: string;
+  quietEnd: string;
+}
+

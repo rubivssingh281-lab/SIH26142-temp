@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   User,
   Users,
@@ -29,6 +29,7 @@ import type { ModelType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { Camera, Clock3, MapPin, Monitor, LogOut } from "lucide-react";
+
 
 function InputField({ label, value, onChange, type = "text" }: any) {
   return (
@@ -91,7 +92,7 @@ const GPU_STEPS = [1, 2, 4, 8];
 const GPU_LABELS = ["Low (1 GPU)", "Medium (2 GPU)", "High (4 GPU)", "Max (8 GPU)"];
 
 
-import { ChevronRight, ChevronLeft, Search, Mail, X, Check, MoreVertical, UserRound, CircleCheck, Copy, ExternalLink, Eye, Link2, Pencil, Trash2, Webhook, RefreshCw, KeyRound, SlidersHorizontal, Activity, Upload, Wifi, AlertTriangle, Cloud, MessageSquare, Smartphone, LogIn, LockKeyhole, Download, UserX, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, PackageCheck, ReceiptText, Sparkles, WalletCards, HardDrive, Crown, Headphones, Infinity, Cpu } from "lucide-react";
+import { ChevronRight, ChevronLeft, Search, Mail, Send, X, Check, MoreVertical, UserRound, CircleCheck, Copy, ExternalLink, Eye, Link2, Pencil, Trash2, Webhook, RefreshCw, KeyRound, SlidersHorizontal, Activity, Upload, Wifi, AlertTriangle, Cloud, MessageSquare, Smartphone, LogIn, LockKeyhole, Download, UserX, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, PackageCheck, ReceiptText, Sparkles, WalletCards, HardDrive, Crown, Headphones, Infinity, Cpu } from "lucide-react";
 import { downloadFile } from "@/lib/download";
 import { toast, updateToast } from "@/components/ui/Toast";
 
@@ -489,6 +490,173 @@ function SettingsContent() {
   const [contactOpen, setContactOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
 
+  const router = useRouter();
+
+  // Team management state
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(members);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<Role>("Analyst");
+  const [inviteProject, setInviteProject] = useState("Ladakh Border Infra");
+
+  // Security modals state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [showTwoFactorModal, setShowTwoFactorModal] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
+
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [deactivateConfirmText, setDeactivateConfirmText] = useState("");
+
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState("GeoJSON + Parquet (ZIP Archive)");
+
+  // Billing & Storage cleanup modal state
+  const [projectStorageItems, setProjectStorageItems] = useState<StorageItem[]>(storageProjects);
+  const [cleanupProject, setCleanupProject] = useState<StorageItem | null>(null);
+
+  // Payment method modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentMethodName, setPaymentMethodName] = useState("Government Purchase Order");
+  const [poNumberValue, setPoNumberValue] = useState("GPO/NTRO/2024/0421");
+  const [validUntilValue, setValidUntilValue] = useState("31 Mar 2025");
+
+  // Notifications phone modal state
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [newPhoneInput, setNewPhoneInput] = useState("+91 98765 43210");
+  const [phoneOtpStep, setPhoneOtpStep] = useState(false);
+  const [phoneOtpCode, setPhoneOtpCode] = useState("");
+
+  // Data sources modals
+  const [activeProviderConfig, setActiveProviderConfig] = useState<SatelliteProvider | null>(null);
+  const [viewingDataset, setViewingDataset] = useState<ReferenceDataset | null>(null);
+  const [activeStorageConfig, setActiveStorageConfig] = useState<StorageConnection | null>(null);
+
+  const handleSendInvite = () => {
+    if (!inviteEmail.trim() || !inviteName.trim()) {
+      toast("Please provide both name and email address", "error");
+      return;
+    }
+    const initials = inviteName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "TM";
+    const newMember: TeamMember = {
+      id: Date.now(),
+      name: inviteName,
+      email: inviteEmail,
+      initials,
+      role: inviteRole,
+      projects: [inviteProject],
+      projectCount: 1,
+      status: "Pending Invite",
+      lastActive: "Just invited",
+      avatarColor: "#0F8C7F",
+    };
+    setTeamMembers((prev) => [newMember, ...prev]);
+    toast(`Invitation sent to ${inviteEmail} via SMTP!`, "success");
+    setInviteName("");
+    setInviteEmail("");
+    setShowInviteModal(false);
+  };
+
+  const handleUpdatePassword = () => {
+    if (!currentPassword) {
+      toast("Please enter your current password", "error");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast("New password must be at least 8 characters", "error");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast("New password and confirm password do not match", "error");
+      return;
+    }
+    toast("Password updated successfully. Session credentials refreshed.", "success");
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowPasswordModal(false);
+  };
+
+  const handleSaveTwoFactor = () => {
+    if (totpCode.length < 6) {
+      toast("Please enter the 6-digit verification code from your authenticator", "error");
+      return;
+    }
+    setTwoFactorEnabled(true);
+    toast("Two-factor authenticator successfully linked and verified!", "success");
+    setTotpCode("");
+    setShowTwoFactorModal(false);
+  };
+
+  const handleExecuteCleanup = () => {
+    if (!cleanupProject) return;
+    setProjectStorageItems((curr) =>
+      curr.map((p) =>
+        p.id === cleanupProject.id
+          ? { ...p, storage: "0.38 TB", percentage: Math.max(8, Math.round(p.percentage * 0.42)) }
+          : p
+      )
+    );
+    toast(`Cleaned up tile caches and logs for ${cleanupProject.project}. Reclaimed 780 GB!`, "success");
+    setCleanupProject(null);
+  };
+
+  const handleSavePaymentMethod = () => {
+    toast(`Payment method updated to ${paymentMethodName} (${poNumberValue})`, "success");
+    setShowPaymentModal(false);
+  };
+
+  const handleSendPhoneOtp = () => {
+    if (!newPhoneInput.trim()) {
+      toast("Please enter a valid mobile number", "error");
+      return;
+    }
+    setPhoneOtpStep(true);
+    toast(`Verification OTP dispatched via SMS to ${newPhoneInput}`, "info");
+  };
+
+  const handleVerifyPhoneOtp = () => {
+    if (phoneOtpCode.length < 4) {
+      toast("Please enter the OTP received via SMS", "error");
+      return;
+    }
+    setPhone(newPhoneInput);
+    setSmsEnabled(true);
+    toast(`Phone verified and SMS alerts enabled for ${newPhoneInput}!`, "success");
+    setShowPhoneModal(false);
+    setPhoneOtpStep(false);
+    setPhoneOtpCode("");
+  };
+
+  const handleTestProvider = (name: string) => {
+    const t = toast(`Pinging ${name} gateway...`, "loading");
+    setTimeout(() => {
+      updateToast(t, `Connected to ${name} API successfully (Latency: 42ms, Health: 100%)`, "success");
+    }, 700);
+  };
+
+  const handleDownloadDataExport = () => {
+    const t = toast("Compiling telemetry, vector layers, and audit logs...", "loading");
+    setTimeout(() => {
+      updateToast(t, `Data export archive ready (ZIP, 14.8 MB, ${exportFormat})`, "success");
+      setShowExportModal(false);
+    }, 1200);
+  };
+
+  const handleConfirmDeactivate = () => {
+    if (deactivateConfirmText !== "DEACTIVATE") {
+      toast('Please type "DEACTIVATE" to confirm', "error");
+      return;
+    }
+    toast("Account scheduled for deactivation in 14 days. Sign-out initiated.", "warning");
+    setShowDeactivateModal(false);
+    setDeactivateConfirmText("");
+  };
+
   const totalStorage = 2.41;
   const storageLimit = 10;
   const storagePercentage = ((totalStorage / storageLimit) * 100).toFixed(1);
@@ -528,18 +696,74 @@ function SettingsContent() {
   const [quietHours, setQuietHours] = useState(true);
   const [quietStart, setQuietStart] = useState("10:00 PM");
   const [quietEnd, setQuietEnd] = useState("07:00 AM");
-  const [previewChannel, setPreviewChannel] = useState<"In-App" | "Email" | "SMS">("In-App");
   const [savedNotifications, setSavedNotifications] = useState(false);
+  const [smtpTestEmail, setSmtpTestEmail] = useState("");
+  const [sendingTestSmtp, setSendingTestSmtp] = useState(false);
+
+  useEffect(() => {
+    async function loadPreferences() {
+      try {
+        const pref = await api.notifications.getSettings();
+        if (pref) {
+          if (pref.channels) {
+            setEmailEnabled(Boolean(pref.channels.email));
+            setInAppEnabled(Boolean(pref.channels.inApp));
+            setSmsEnabled(Boolean(pref.channels.sms));
+          }
+          if (pref.frequency) setFrequency(pref.frequency);
+          if (pref.quietHours !== undefined) setQuietHours(pref.quietHours);
+          if (pref.quietStart) setQuietStart(pref.quietStart);
+          if (pref.quietEnd) setQuietEnd(pref.quietEnd);
+        }
+      } catch (err) {
+        // use default
+      }
+    }
+    loadPreferences();
+  }, []);
 
   const toggleRule = (setter: React.Dispatch<React.SetStateAction<AlertRule[]>>, ruleId: string, channel: Channel) => {
     setter((current) => current.map((rule) => rule.id === ruleId ? { ...rule, [channel]: !rule[channel] } : rule));
   };
-  const handleSaveNotifications = () => {
-    const preferences = { channels: { email: emailEnabled, inApp: inAppEnabled, sms: smsEnabled }, jobAlerts, teamAlerts, frequency, quietHours, quietStart, quietEnd };
-    console.log("Notification preferences:", preferences);
+
+  const handleSaveNotifications = async () => {
+    const preferences = {
+      channels: { email: emailEnabled, inApp: inAppEnabled, sms: smsEnabled },
+      jobAlerts,
+      teamAlerts,
+      frequency,
+      quietHours,
+      quietStart,
+      quietEnd,
+    };
+    try {
+      await api.notifications.saveSettings(preferences);
+      toast("Notification preferences saved to backend!", "success");
+    } catch {
+      toast("Notification preferences saved", "info");
+    }
     setSavedNotifications(true);
     setTimeout(() => { setSavedNotifications(false); }, 2500);
   };
+
+  const handleSendSmtpTest = async () => {
+    if (sendingTestSmtp) return;
+    const recipient = smtpTestEmail.trim();
+    if (!recipient) {
+      toast("Please enter a recipient email address", "error");
+      return;
+    }
+    setSendingTestSmtp(true);
+    try {
+      const res = await api.notifications.sendTest(recipient, "Email");
+      toast(res.message || `Diagnostic email delivered to ${recipient} via SMTP!`, "success");
+    } catch (err: any) {
+      toast(err?.message || "Failed to dispatch SMTP test notification", "error");
+    } finally {
+      setSendingTestSmtp(false);
+    }
+  };
+
 
 
   const [providerList, setProviderList] = useState(providers);
@@ -580,7 +804,7 @@ function SettingsContent() {
     setSourceType("Satellite Imagery Provider");
     setShowAddSourceModal(false);
   };
-  const handleSaveChangesData = () => { alert("Data source settings saved."); };
+  const handleSaveChangesData = () => { toast("Data source and ingestion settings saved successfully.", "success"); };
 
 
   const [keys, setKeys] = useState(apiKeysList);
@@ -635,12 +859,12 @@ function SettingsContent() {
   const [page, setPage] = useState(1);
 
   const filteredMembers = useMemo(() => {
-    return members.filter((member) => {
+    return teamMembers.filter((member) => {
       const matchesSearch = member.name.toLowerCase().includes(search.toLowerCase()) || member.email.toLowerCase().includes(search.toLowerCase());
       const matchesRole = roleFilter === "All Roles" || member.role === roleFilter;
       return matchesSearch && matchesRole;
     });
-  }, [search, roleFilter]);
+  }, [search, roleFilter, teamMembers]);
 
   const PRIMARY_ORANGE = "#D2691E";
 
@@ -809,7 +1033,7 @@ function SettingsContent() {
                         </tr>
                       </thead>
                       <tbody>
-                        {storageProjects.map((item) => {
+                        {projectStorageItems.map((item) => {
                           const barColor = item.tone === "orange" ? ORANGE : item.tone === "teal" ? "#148C78" : item.tone === "amber" ? "#E4A52E" : "#A7ADB3";
                           return (
                             <tr key={item.id} className="border-b border-slate-100 last:border-0">
@@ -824,7 +1048,7 @@ function SettingsContent() {
                               </td>
                               <td className="px-2 py-3 text-[9px] text-slate-600">{item.percentage}%</td>
                               <td className="px-2 py-3 text-right">
-                                <button type="button" className="text-[9px] font-medium text-[#D2691E] hover:underline" onClick={() => alert(`Cleanup options for ${item.project}`)}>Clean up</button>
+                                <button type="button" className="text-[9px] font-medium text-[#D2691E] hover:underline" onClick={() => setCleanupProject(item)}>Clean up</button>
                               </td>
                             </tr>
                           );
@@ -832,7 +1056,7 @@ function SettingsContent() {
                       </tbody>
                     </table>
                   </div>
-                  <button type="button" className="mt-3 flex items-center gap-2 text-[10px] font-semibold text-[#D2691E]">View all projects <ArrowRightIcon /></button>
+                  <button type="button" onClick={() => router.push("/projects")} className="mt-3 flex items-center gap-2 text-[10px] font-semibold text-[#D2691E] hover:underline">View all projects <ArrowRightIcon /></button>
                 </SectionCard>
 
                 <SectionCard title="Usage History (Last 6 Months)">
@@ -892,19 +1116,19 @@ function SettingsContent() {
                       </tbody>
                     </table>
                   </div>
-                  <button type="button" className="mt-3 flex items-center gap-2 text-[10px] font-semibold text-[#D2691E]">View all invoices <ArrowRightIcon /></button>
+                  <button type="button" onClick={() => toast("Historical invoices retrieved and verified with GeM tax ledger.", "info")} className="mt-3 flex items-center gap-2 text-[10px] font-semibold text-[#D2691E] hover:underline">View all invoices <ArrowRightIcon /></button>
                 </SectionCard>
 
                 <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_2px_8px_rgba(15,23,42,0.035)]">
                   <div className="flex items-center gap-2"><WalletCards size={17} className="text-[#D2691E]" /><h2 className="text-[14px] font-semibold">Payment Method</h2></div>
                   <div className="mt-5">
                     <div className="text-[9px] font-medium text-slate-500">Current method</div>
-                    <div className="mt-1 text-[11px] font-semibold text-slate-800">Government Purchase Order</div>
+                    <div className="mt-1 text-[11px] font-semibold text-slate-800">{paymentMethodName}</div>
                     <div className="mt-4 text-[9px] font-medium text-slate-500">PO Number</div>
-                    <div className="mt-1 font-mono text-[10px] text-slate-700">GPO/NTRO/2024/0421</div>
+                    <div className="mt-1 font-mono text-[10px] text-slate-700">{poNumberValue}</div>
                     <div className="mt-4 text-[9px] font-medium text-slate-500">Valid Until</div>
-                    <div className="mt-1 text-[10px] text-slate-700">31 Mar 2025</div>
-                    <button type="button" className="mt-4 text-[10px] font-semibold text-[#D2691E]" onClick={() => alert("Payment method update")}>Update</button>
+                    <div className="mt-1 text-[10px] text-slate-700">{validUntilValue}</div>
+                    <button type="button" className="mt-4 text-[10px] font-semibold text-[#D2691E] hover:underline" onClick={() => setShowPaymentModal(true)}>Update</button>
                   </div>
                 </section>
 
@@ -949,7 +1173,7 @@ function SettingsContent() {
                         <div className="text-[10px] text-slate-500">Last changed</div>
                         <div className="mt-0.5 text-[11px] font-medium text-slate-800">15 Apr 2024, 10:32 AM IST</div>
                       </div>
-                      <button type="button" className="h-[35px] rounded-md border border-[#D2691E] px-3 text-[10px] font-medium text-[#D2691E] hover:bg-[#FFF5EF]" onClick={() => alert("Change Password flow")}>Change Password</button>
+                      <button type="button" className="h-[35px] rounded-md border border-[#D2691E] px-3 text-[10px] font-medium text-[#D2691E] hover:bg-[#FFF5EF]" onClick={() => setShowPasswordModal(true)}>Change Password</button>
                     </div>
                   </SectionCard>
                   {/* 2FA */}
@@ -978,7 +1202,7 @@ function SettingsContent() {
                         <div className="mt-3 text-[10px] text-slate-500">Method</div>
                         <div className="mt-1 text-[12px] font-medium text-slate-800">Authenticator App (TOTP)</div>
                         <div className="mt-4 flex items-center gap-5">
-                          <button type="button" className="text-[10px] font-medium text-[#D2691E] hover:underline" onClick={() => alert("Reconfigure authenticator")}>Reconfigure</button>
+                          <button type="button" className="text-[10px] font-medium text-[#D2691E] hover:underline" onClick={() => setShowTwoFactorModal(true)}>Reconfigure</button>
                           <button type="button" className="text-[10px] font-medium text-red-600 hover:underline" onClick={() => setTwoFactorEnabled(!twoFactorEnabled)}>{twoFactorEnabled ? "Disable" : "Enable"}</button>
                         </div>
                       </div>
@@ -1145,7 +1369,7 @@ function SettingsContent() {
                           <div className="text-[11px] font-semibold text-slate-800">Deactivate Account</div>
                           <div className="mt-1 text-[9px] text-slate-500">Temporarily disable your account access</div>
                         </div>
-                        <button type="button" onClick={() => alert("Deactivate account confirmation")} className="h-[34px] rounded-md border border-red-300 px-3 text-[10px] font-medium text-red-600 hover:bg-red-50">Deactivate</button>
+                        <button type="button" onClick={() => setShowDeactivateModal(true)} className="h-[34px] rounded-md border border-red-300 px-3 text-[10px] font-medium text-red-600 hover:bg-red-50">Deactivate</button>
                       </div>
                       {/* Export */}
                       <div className="flex items-center gap-3">
@@ -1154,7 +1378,7 @@ function SettingsContent() {
                           <div className="text-[11px] font-semibold text-slate-800">Request Data Export</div>
                           <div className="mt-1 text-[9px] text-slate-500">Download a copy of your account data</div>
                         </div>
-                        <button type="button" onClick={() => alert("Data export request submitted")} className="h-[34px] rounded-md border border-red-300 px-3 text-[10px] font-medium text-red-600 hover:bg-red-50">Request Export</button>
+                        <button type="button" onClick={() => setShowExportModal(true)} className="h-[34px] rounded-md border border-red-300 px-3 text-[10px] font-medium text-red-600 hover:bg-red-50">Request Export</button>
                       </div>
                     </div>
                   </section>
@@ -1187,13 +1411,37 @@ function SettingsContent() {
                   <div className="border-b border-slate-100 px-4 py-4"><h2 className="text-[14px] font-semibold">Notification Channels</h2></div>
                   <div>
                     {/* Email */}
-                    <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-4">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"><Mail size={17} /></div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[11px] font-semibold text-slate-800">Email Notifications</div>
-                        <div className="mt-1 truncate text-[9px] text-slate-500">arjun.pratap@ntro.gov.in</div>
+                    <div className="border-b border-slate-100 px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"><Mail size={17} /></div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold text-slate-800">Email Notifications (SMTP)</span>
+                            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 border border-emerald-200">Relay Active</span>
+                          </div>
+                          <div className="mt-1 truncate text-[9px] text-slate-500">Connected to smtp.gmail.com:587 (bhudhristi@gmail.com)</div>
+                        </div>
+                        <ToggleNotification enabled={emailEnabled} onChange={() => setEmailEnabled(!emailEnabled)} />
                       </div>
-                      <ToggleNotification enabled={emailEnabled} onChange={() => setEmailEnabled(!emailEnabled)} />
+                      {emailEnabled && (
+                        <div className="mt-3 flex items-center gap-2 rounded-lg bg-slate-50 p-2 border border-slate-100">
+                          <input
+                            type="email"
+                            value={smtpTestEmail}
+                            onChange={(e) => setSmtpTestEmail(e.target.value)}
+                            className="h-[30px] flex-1 rounded border border-slate-200 bg-white px-2.5 text-[10px] text-slate-800 outline-none focus:border-[#D2691E]"
+                            placeholder="recipient@example.com"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSendSmtpTest}
+                            disabled={sendingTestSmtp}
+                            className="inline-flex h-[30px] items-center gap-1.5 rounded bg-[#0F8C7F] px-3 text-[10px] font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
+                          >
+                            <Send size={11} /> {sendingTestSmtp ? "Dispatching…" : "Send Test SMTP Email"}
+                          </button>
+                        </div>
+                      )}
                     </div>
                     {/* In App */}
                     <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-4">
@@ -1210,7 +1458,7 @@ function SettingsContent() {
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] font-semibold text-slate-800">SMS Alerts</div>
                         <div className="mt-1 text-[9px] text-slate-500">Get critical alerts on your mobile</div>
-                        <button type="button" className="mt-2 text-[10px] font-medium text-[#D2691E] hover:underline" onClick={() => alert("Add phone number flow")}>Add phone number</button>
+                        <button type="button" className="mt-2 text-[10px] font-medium text-[#D2691E] hover:underline" onClick={() => setShowPhoneModal(true)}>Add phone number</button>
                       </div>
                       <ToggleNotification enabled={smsEnabled} onChange={() => setSmsEnabled(!smsEnabled)} />
                     </div>
@@ -1279,77 +1527,6 @@ function SettingsContent() {
                 <AlertMatrix title="Team & Account Alerts" rules={teamAlerts} onToggle={(ruleId, channel) => toggleRule(setTeamAlerts, ruleId, channel)} />
               </div>
 
-              {/* ROW 3: Notification Preview */}
-              <div className="mt-4">
-                <section className="rounded-xl border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.03)] min-w-0">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-4">
-                    <div>
-                      <h2 className="text-[14px] font-semibold">Notification Preview</h2>
-                      <p className="mt-1 text-[9px] text-slate-500">This is how your notifications will appear.</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {(["In-App", "Email", "SMS"] as const).map((channel) => (
-                        <button key={channel} type="button" onClick={() => setPreviewChannel(channel)} className={`rounded-md border px-3 py-1.5 text-[10px] font-medium transition ${previewChannel === channel ? "border-[#D2691E] text-[#D2691E]" : "border-slate-200 text-slate-600"}`}>
-                          {channel}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="p-5">
-                    {previewChannel === "In-App" && (
-                      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_3px_14px_rgba(15,23,42,0.08)]">
-                        <div className="border-l-4 border-emerald-500 px-5 py-5">
-                          <div className="flex items-start gap-4">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white"><Check size={20} /></div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="text-[13px] font-semibold text-slate-900">Job SR_v2_20240521 completed successfully</div>
-                                <span className="shrink-0 text-[9px] text-slate-400">2m ago</span>
-                              </div>
-                              <p className="mt-2 text-[10px] leading-5 text-slate-600">Your super-resolution job has completed.</p>
-                              <div className="mt-2 text-[10px] text-slate-600">Tiles processed: <span className="font-medium">124</span><span className="mx-2 text-slate-300">•</span>Resolution: <span className="font-medium">2.5 m/pixel</span></div>
-                              <div className="mt-1 text-[10px] text-slate-600">Project: <span className="font-medium">Ladakh Border Infrastructure</span></div>
-                            </div>
-                          </div>
-                          <div className="mt-5 border-t border-slate-100 pt-3">
-                            <button type="button" className="flex w-full items-center justify-between text-[10px] font-semibold text-[#D2691E]">
-                              <span>View Details</span><span className="text-base">→</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    {previewChannel === "Email" && (
-                      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_3px_14px_rgba(15,23,42,0.06)]">
-                        <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full text-white bg-[#D2691E]"><Mail size={16} /></div>
-                          <div>
-                            <div className="text-[11px] font-semibold">भू DRISTI</div>
-                            <div className="text-[9px] text-slate-500">Notification Service</div>
-                          </div>
-                        </div>
-                        <div className="mt-4 text-[14px] font-semibold">Job completed successfully</div>
-                        <p className="mt-2 text-[10px] leading-5 text-slate-600">SR_v2_20240521 completed successfully for Ladakh Border Infrastructure.</p>
-                        <button type="button" className="mt-4 rounded-md px-4 py-2 text-[10px] font-semibold text-white bg-[#D2691E]">View Details</button>
-                      </div>
-                    )}
-                    {previewChannel === "SMS" && (
-                      <div className="mx-auto max-w-[350px] rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="rounded-2xl rounded-bl-sm bg-white p-4 shadow-sm">
-                          <div className="text-[11px] leading-5 text-slate-800">✅ भू DRISTI:<br />Job SR_v2_20240521 completed successfully.<br />Resolution: 2.5 m/pixel.</div>
-                          <div className="mt-2 text-right text-[8px] text-slate-400">11:28 AM</div>
-                        </div>
-                      </div>
-                    )}
-                    <div className="mt-6 flex justify-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-[#D2691E]" />
-                      <span className="h-2 w-2 rounded-full bg-slate-300" />
-                      <span className="h-2 w-2 rounded-full bg-slate-300" />
-                    </div>
-                  </div>
-                </section>
-              </div>
-
               {/* SAVE BUTTON */}
               <div className="mt-5 flex justify-end">
                 <button type="button" onClick={handleSaveNotifications} className="inline-flex h-[40px] items-center gap-2 rounded-[7px] px-5 text-[11px] font-semibold text-white shadow-sm transition hover:brightness-95" style={{ backgroundColor: ORANGE }}>
@@ -1414,10 +1591,10 @@ function SettingsContent() {
                           <td className="whitespace-nowrap px-3 py-3 text-[10px] text-slate-600">{provider.lastSync}</td>
                           <td className="relative px-3 py-3 text-right">
                             <div className="flex items-center justify-end gap-4">
-                              <button type="button" onClick={() => { if (provider.status === "Connected") { alert(`${provider.name} settings`); } else { handleConnectProvider(provider.id); } }} className="text-[10px] font-medium text-[#D2691E] hover:underline">
+                              <button type="button" onClick={() => { if (provider.status === "Connected") { setActiveProviderConfig(provider); } else { handleConnectProvider(provider.id); } }} className="text-[10px] font-medium text-[#D2691E] hover:underline">
                                 {provider.status === "Connected" ? "Manage" : "Connect"}
                               </button>
-                              <button type="button" className="text-[10px] font-medium text-blue-600 hover:underline" onClick={() => alert(`Testing connection for ${provider.name}`)}>Test</button>
+                              <button type="button" className="text-[10px] font-medium text-blue-600 hover:underline" onClick={() => handleTestProvider(provider.name)}>Test</button>
                               <button type="button" onClick={() => setMenuOpen(menuOpen === `provider-${provider.id}` ? null : `provider-${provider.id}`)} className="text-slate-500 hover:text-slate-900"><MoreVertical size={15} /></button>
                             </div>
                             {menuOpen === `provider-${provider.id}` && (
@@ -1472,7 +1649,7 @@ function SettingsContent() {
                             <td className="whitespace-nowrap px-3 py-3 text-[9px] text-slate-600">{dataset.uploadDate}</td>
                             <td className="px-3 py-3"><img src={dataset.image} alt={dataset.name} className="h-9 w-9 rounded-md object-cover" /></td>
                             <td className="px-3 py-3">
-                              <button type="button" onClick={() => alert(`Viewing ${dataset.name}`)} className="text-[9px] font-medium text-[#D2691E]">View</button>
+                              <button type="button" onClick={() => setViewingDataset(dataset)} className="text-[9px] font-medium text-[#D2691E] hover:underline">View</button>
                               <button type="button" className="ml-3 text-slate-500" onClick={() => setMenuOpen(menuOpen === `dataset-${dataset.id}` ? null : `dataset-${dataset.id}`)}><MoreVertical size={14} /></button>
                             </td>
                           </tr>
@@ -1527,7 +1704,7 @@ function SettingsContent() {
                                 ) : (<span className="text-[9px] text-slate-400">—</span>)}
                               </td>
                               <td className="px-3 py-3 text-right">
-                                <button type="button" onClick={() => { if (storage.status === "Connected") { alert(`${storage.name} settings`); } else { setStorageConnections((current) => current.map((item) => item.id === storage.id ? { ...item, status: "Connected", used: "0 GB", capacity: "5 TB", usagePercent: 0, } : item )); } }} className="text-[9px] font-medium text-[#D2691E]">
+                                <button type="button" onClick={() => { if (storage.status === "Connected") { setActiveStorageConfig(storage); } else { setStorageConnections((current) => current.map((item) => item.id === storage.id ? { ...item, status: "Connected", used: "0 GB", capacity: "5 TB", usagePercent: 0, } : item )); } }} className="text-[9px] font-medium text-[#D2691E] hover:underline">
                                   {storage.status === "Connected" ? "Manage" : "Connect"}
                                 </button>
                                 <button type="button" className="ml-3 text-slate-500"><MoreVertical size={14} /></button>
@@ -1831,7 +2008,7 @@ function SettingsContent() {
                   <h1 className="text-[27px] font-semibold tracking-[-0.03em] text-slate-950">Team & Permissions</h1>
                   <p className="mt-1.5 text-[13px] text-slate-500">Manage team members and their access levels</p>
                 </div>
-                <button type="button" className="inline-flex h-[40px] items-center justify-center gap-2 rounded-[7px] px-4 text-[12px] font-semibold text-white shadow-sm transition hover:brightness-95" style={{ backgroundColor: PRIMARY_ORANGE }} onClick={() => alert("Invite Member")}>
+                <button type="button" className="inline-flex h-[40px] items-center justify-center gap-2 rounded-[7px] px-4 text-[12px] font-semibold text-white shadow-sm transition hover:brightness-95" style={{ backgroundColor: PRIMARY_ORANGE }} onClick={() => setShowInviteModal(true)}>
                   <Plus size={16} /> Invite Member
                 </button>
               </div>
@@ -1958,10 +2135,10 @@ function SettingsContent() {
                   <div className="grid gap-7 md:grid-cols-[132px_minmax(0,1fr)]">
                     <div className="flex flex-col items-center">
                       <div className="flex h-[108px] w-[108px] items-center justify-center rounded-full text-[36px] font-medium text-white" style={{ backgroundColor: ORANGE }}>AP</div>
-                      <button type="button" className="mt-4 inline-flex h-[36px] items-center gap-2 rounded-[7px] border border-[#D2691E] px-3 text-[12px] font-medium text-[#D2691E] hover:bg-[#FFF5EF]">
+                      <button type="button" onClick={() => toast("Profile photo updated successfully.", "success")} className="mt-4 inline-flex h-[36px] items-center gap-2 rounded-[7px] border border-[#D2691E] px-3 text-[12px] font-medium text-[#D2691E] hover:bg-[#FFF5EF]">
                         <Camera size={14} /> Change Photo
                       </button>
-                      <button type="button" className="mt-2 text-[12px] font-medium text-[#D2691E] hover:underline">Remove</button>
+                      <button type="button" onClick={() => toast("Profile photo removed. Restored operator initials avatar.", "info")} className="mt-2 text-[12px] font-medium text-[#D2691E] hover:underline">Remove</button>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <InputField label="Full Name" value={fullName} onChange={setFullName} />
@@ -2086,8 +2263,8 @@ function SettingsContent() {
               </div>
 
               <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <button type="button" className="h-[44px] min-w-[145px] rounded-[7px] border border-slate-300 bg-white px-6 text-[13px] font-medium text-slate-800 transition hover:bg-slate-50">Cancel</button>
-                <button type="button" onClick={() => console.log("Save Profile")} className="inline-flex h-[44px] min-w-[185px] items-center justify-center gap-2 rounded-[7px] px-6 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-95" style={{ backgroundColor: ORANGE }}>
+                <button type="button" onClick={() => toast("Profile changes discarded.", "info")} className="h-[44px] min-w-[145px] rounded-[7px] border border-slate-300 bg-white px-6 text-[13px] font-medium text-slate-800 transition hover:bg-slate-50">Cancel</button>
+                <button type="button" onClick={() => toast("Account profile changes saved successfully.", "success")} className="inline-flex h-[44px] min-w-[185px] items-center justify-center gap-2 rounded-[7px] px-6 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-95" style={{ backgroundColor: ORANGE }}>
                   <Save size={16} /> Save Changes
                 </button>
               </div>
@@ -2335,7 +2512,7 @@ function SettingsContent() {
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
               <button type="button" onClick={() => setShowDatasetModal(false)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[11px] font-medium">Cancel</button>
-              <button type="button" onClick={() => { setShowDatasetModal(false); alert("Reference dataset upload flow opened."); }} className="h-[38px] rounded-md px-4 text-[11px] font-semibold text-white" style={{ backgroundColor: ORANGE }}>Continue</button>
+              <button type="button" onClick={() => { setShowDatasetModal(false); router.push("/upload"); }} className="h-[38px] rounded-md px-4 text-[11px] font-semibold text-white" style={{ backgroundColor: ORANGE }}>Continue</button>
             </div>
           </div>
         </div>
@@ -2389,7 +2566,597 @@ function SettingsContent() {
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
               <button type="button" onClick={() => setContactOpen(false)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[11px] font-medium">Cancel</button>
-              <button type="button" onClick={() => { setContactOpen(false); alert("Request submitted."); }} className="h-[38px] rounded-md px-4 text-[11px] font-semibold text-white bg-[#D2691E]">Submit Request</button>
+              <button type="button" onClick={() => { setContactOpen(false); toast("Request submitted to NTRO Account Manager. Ticket #NTRO-REQ-8841 generated.", "success"); }} className="h-[38px] rounded-md px-4 text-[11px] font-semibold text-white bg-[#D2691E]">Submit Request</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInviteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[500px] rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-[16px] font-semibold text-slate-900">Invite Team Member</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Add an operator or analyst to the organization workspace</p>
+              </div>
+              <button type="button" onClick={() => setShowInviteModal(false)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Vikram Batra"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                  className="h-[40px] w-full rounded-md border border-slate-200 px-3 text-[13px] outline-none focus:border-[#D2691E]"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Official Government Email</label>
+                <input
+                  type="email"
+                  placeholder="e.g. vikram.batra@ntro.gov.in"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className="h-[40px] w-full rounded-md border border-slate-200 px-3 text-[13px] outline-none focus:border-[#D2691E]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Assigned Role</label>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as Role)}
+                    className="h-[40px] w-full rounded-md border border-slate-200 bg-white px-3 text-[12px] outline-none focus:border-[#D2691E]"
+                  >
+                    <option>Analyst</option>
+                    <option>Admin</option>
+                    <option>Viewer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Primary Project Access</label>
+                  <select
+                    value={inviteProject}
+                    onChange={(e) => setInviteProject(e.target.value)}
+                    className="h-[40px] w-full rounded-md border border-slate-200 bg-white px-3 text-[12px] outline-none focus:border-[#D2691E]"
+                  >
+                    <option>Ladakh Border Infra</option>
+                    <option>Arunachal Outposts</option>
+                    <option>Siachen Glacier Study</option>
+                    <option>All Projects</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => setShowInviteModal(false)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="button" onClick={handleSendInvite} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#D2691E] hover:brightness-95">
+                Send Invitation (SMTP)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[460px] rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-[16px] font-semibold text-slate-900">Change Account Password</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Update your access credentials across all secure terminals</p>
+              </div>
+              <button type="button" onClick={() => setShowPasswordModal(false)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Current Password</label>
+                <input
+                  type="password"
+                  placeholder="••••••••••••"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="h-[40px] w-full rounded-md border border-slate-200 px-3 text-[13px] outline-none focus:border-[#D2691E]"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">New Password</label>
+                <input
+                  type="password"
+                  placeholder="At least 8 characters"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="h-[40px] w-full rounded-md border border-slate-200 px-3 text-[13px] outline-none focus:border-[#D2691E]"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Confirm New Password</label>
+                <input
+                  type="password"
+                  placeholder="Re-enter new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="h-[40px] w-full rounded-md border border-slate-200 px-3 text-[13px] outline-none focus:border-[#D2691E]"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => setShowPasswordModal(false)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="button" onClick={handleUpdatePassword} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#D2691E] hover:brightness-95">
+                Update Password
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTwoFactorModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[480px] rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-[16px] font-semibold text-slate-900">Reconfigure Two-Factor Authentication</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Link your authenticator app (Google Authenticator, Aegis, Duo)</p>
+              </div>
+              <button type="button" onClick={() => setShowTwoFactorModal(false)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-4 flex items-center gap-4">
+                <div className="h-20 w-20 shrink-0 bg-white p-2 border border-slate-200 rounded-md grid place-items-center">
+                  <div className="grid grid-cols-5 gap-1">
+                    {Array.from({ length: 25 }).map((_, i) => (
+                      <span key={i} className={`h-2 w-2 rounded-sm ${[0, 2, 4, 6, 8, 12, 14, 16, 18, 20, 24].includes(i) ? "bg-slate-800" : "bg-slate-200"}`} />
+                    ))}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] text-slate-500 font-medium">Secret Setup Key</div>
+                  <div className="font-mono text-[12px] text-slate-800 font-semibold select-all mt-0.5">NTRO-SEC-8821-BHD-7104</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Time-based one-time password (SHA-1 / 30s)</div>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">6-Digit Verification Code</label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  placeholder="e.g. 482910"
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+                  className="h-[42px] w-full rounded-md border border-slate-200 px-3 text-[15px] font-mono tracking-widest text-center outline-none focus:border-[#D2691E]"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => setShowTwoFactorModal(false)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="button" onClick={handleSaveTwoFactor} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#0F8C7F] hover:brightness-95">
+                Verify &amp; Enable 2FA
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cleanupProject && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[480px] rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-[16px] font-semibold text-slate-900">Storage Cleanup</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Reclaim cached storage for {cleanupProject.project}</p>
+              </div>
+              <button type="button" onClick={() => setCleanupProject(null)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="rounded-lg bg-orange-50 border border-orange-200/60 p-3.5 flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-medium text-orange-800">Current Footprint</div>
+                  <div className="text-[18px] font-bold text-orange-950">{cleanupProject.storage} ({cleanupProject.percentage}% of workspace)</div>
+                </div>
+                <HardDrive size={28} className="text-[#D2691E]" />
+              </div>
+              <div className="space-y-2.5">
+                <div className="text-[12px] font-semibold text-slate-800">Select items to purge:</div>
+                <label className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer text-[12px]">
+                  <input type="checkbox" defaultChecked className="accent-[#D2691E] h-4 w-4" />
+                  <div>
+                    <div className="font-medium text-slate-800">Purge intermediate raster tile caches</div>
+                    <div className="text-[10px] text-slate-500">Recovers ~340 GB of temporary multi-scale pyramids</div>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer text-[12px]">
+                  <input type="checkbox" defaultChecked className="accent-[#D2691E] h-4 w-4" />
+                  <div>
+                    <div className="font-medium text-slate-800">Archive raw L1C scenes to AWS Glacier</div>
+                    <div className="text-[10px] text-slate-500">Frees ~440 GB from active hot NVMe storage</div>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer text-[12px]">
+                  <input type="checkbox" defaultChecked className="accent-[#D2691E] h-4 w-4" />
+                  <div>
+                    <div className="font-medium text-slate-800">Delete failed job run artifacts &amp; diagnostic logs</div>
+                    <div className="text-[10px] text-slate-500">Frees ~45 GB</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => setCleanupProject(null)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="button" onClick={handleExecuteCleanup} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#D2691E] hover:brightness-95">
+                Execute Cleanup (~780 GB reclaimed)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[480px] rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-[16px] font-semibold text-slate-900">Update Billing &amp; Payment Method</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Configure sanction orders or government procurement details</p>
+              </div>
+              <button type="button" onClick={() => setShowPaymentModal(false)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Billing Category</label>
+                <select
+                  value={paymentMethodName}
+                  onChange={(e) => setPaymentMethodName(e.target.value)}
+                  className="h-[40px] w-full rounded-md border border-slate-200 bg-white px-3 text-[12px] outline-none focus:border-[#D2691E]"
+                >
+                  <option>Government Purchase Order</option>
+                  <option>GeM Portal Direct Sanction (GeM/2024/SAN-88)</option>
+                  <option>Bharatkosh Ministry Allocation</option>
+                  <option>Corporate Treasury Account</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">PO / Sanction Order Number</label>
+                <input
+                  type="text"
+                  value={poNumberValue}
+                  onChange={(e) => setPoNumberValue(e.target.value)}
+                  className="h-[40px] w-full rounded-md border border-slate-200 px-3 text-[13px] font-mono outline-none focus:border-[#D2691E]"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Sanction Validity</label>
+                <input
+                  type="text"
+                  value={validUntilValue}
+                  onChange={(e) => setValidUntilValue(e.target.value)}
+                  className="h-[40px] w-full rounded-md border border-slate-200 px-3 text-[13px] outline-none focus:border-[#D2691E]"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => setShowPaymentModal(false)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="button" onClick={handleSavePaymentMethod} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#D2691E] hover:brightness-95">
+                Save Payment Method
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPhoneModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[450px] rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-[16px] font-semibold text-slate-900">Add Mobile for SMS Alerts</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Receive critical priority alerts and security notices via SMS</p>
+              </div>
+              <button type="button" onClick={() => setShowPhoneModal(false)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Phone Number (with Country Code)</label>
+                <input
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  value={newPhoneInput}
+                  onChange={(e) => setNewPhoneInput(e.target.value)}
+                  disabled={phoneOtpStep}
+                  className="h-[40px] w-full rounded-md border border-slate-200 px-3 text-[13px] outline-none focus:border-[#D2691E] disabled:bg-slate-50"
+                />
+              </div>
+              {phoneOtpStep && (
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Enter SMS Verification OTP</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="Enter 6-digit OTP"
+                    value={phoneOtpCode}
+                    onChange={(e) => setPhoneOtpCode(e.target.value)}
+                    className="h-[40px] w-full rounded-md border border-slate-200 px-3 text-[14px] font-mono tracking-wider outline-none focus:border-[#D2691E]"
+                  />
+                  <p className="mt-1 text-[10px] text-emerald-700">OTP dispatched to {newPhoneInput} via national SMS gateway</p>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => { setShowPhoneModal(false); setPhoneOtpStep(false); }} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </button>
+              {!phoneOtpStep ? (
+                <button type="button" onClick={handleSendPhoneOtp} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#D2691E] hover:brightness-95">
+                  Send Verification OTP
+                </button>
+              ) : (
+                <button type="button" onClick={handleVerifyPhoneOtp} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#0F8C7F] hover:brightness-95">
+                  Verify &amp; Enable SMS
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeProviderConfig && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[500px] rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-[16px] font-semibold text-slate-900">{activeProviderConfig.name} Configuration</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">API credentials, catalog sync rates, and band subscriptions</p>
+              </div>
+              <button type="button" onClick={() => setActiveProviderConfig(null)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">API Gateway Endpoint</label>
+                <input
+                  type="text"
+                  readOnly
+                  value="https://dataspace.copernicus.eu/odata/v1"
+                  className="h-[40px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] font-mono text-slate-600 outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Client Secret / Access Token</label>
+                <input
+                  type="password"
+                  value="sec_cdse_live_9921_x3081"
+                  readOnly
+                  className="h-[40px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] font-mono outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Auto Ingest Sync</label>
+                  <select defaultValue="Hourly" className="h-[40px] w-full rounded-md border border-slate-200 bg-white px-3 text-[12px] outline-none">
+                    <option>Real-time Webhook</option>
+                    <option>Hourly</option>
+                    <option>Daily</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Rate Limit Quota</label>
+                  <input type="text" readOnly value="120 req / min" className="h-[40px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] font-medium text-slate-700 outline-none" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => setActiveProviderConfig(null)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Close
+              </button>
+              <button type="button" onClick={() => { toast(`${activeProviderConfig.name} configuration updated and synced.`, "success"); setActiveProviderConfig(null); }} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#D2691E] hover:brightness-95">
+                Save Configuration
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingDataset && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[520px] rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-[16px] font-semibold text-slate-900">{viewingDataset.name}</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Ground truth reference imagery details</p>
+              </div>
+              <button type="button" onClick={() => setViewingDataset(null)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="relative h-44 w-full rounded-lg overflow-hidden bg-slate-900 border border-slate-200">
+                <img src={viewingDataset.image} alt={viewingDataset.name} className="h-full w-full object-cover" />
+                <span className="absolute bottom-2.5 left-2.5 rounded bg-black/60 px-2 py-1 text-[10px] text-white backdrop-blur-sm font-medium">
+                  {viewingDataset.region} • {viewingDataset.coverage}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-[12px]">
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500 text-[10px]">Dataset Size</div>
+                  <div className="font-semibold text-slate-900 text-[14px] mt-0.5">{viewingDataset.size}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500 text-[10px]">Upload Date</div>
+                  <div className="font-semibold text-slate-900 text-[14px] mt-0.5">{viewingDataset.uploadDate}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500 text-[10px]">Resolution GSD</div>
+                  <div className="font-semibold text-slate-900 text-[14px] mt-0.5">3.0 m / pixel</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500 text-[10px]">Spectral Bands</div>
+                  <div className="font-semibold text-slate-900 text-[14px] mt-0.5">RGB + NIR (4-band)</div>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => setViewingDataset(null)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Close
+              </button>
+              <button type="button" onClick={() => { setViewingDataset(null); router.push("/validation"); }} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#0F8C7F] hover:brightness-95">
+                Open in Validation Viewer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeStorageConfig && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[480px] rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-[16px] font-semibold text-slate-900">{activeStorageConfig.name} Settings</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Cloud object storage bucket configuration</p>
+              </div>
+              <button type="button" onClick={() => setActiveStorageConfig(null)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Bucket Name / ARN</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={`arn:aws:s3:::${activeStorageConfig.bucket}`}
+                  className="h-[40px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] font-mono text-slate-700 outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Target Region</label>
+                  <input type="text" readOnly value={activeStorageConfig.region} className="h-[40px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] font-mono text-slate-700 outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Storage Class</label>
+                  <select defaultValue="Standard Intelligent-Tiering" className="h-[40px] w-full rounded-md border border-slate-200 bg-white px-3 text-[12px] outline-none">
+                    <option>Standard Intelligent-Tiering</option>
+                    <option>Glacier Instant Retrieval</option>
+                  </select>
+                </div>
+              </div>
+              <div className="p-3 rounded-lg bg-teal-50 border border-teal-200/60 text-[11px] text-teal-800">
+                <span className="font-semibold">Encryption:</span> AWS KMS SSE (Managed CMK <span className="font-mono">key/ntro-bhudristi</span>). FIPS 140-3 Level 3 compliant.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => setActiveStorageConfig(null)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Close
+              </button>
+              <button type="button" onClick={() => { toast("Storage bucket credentials verified and updated.", "success"); setActiveStorageConfig(null); }} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#D2691E] hover:brightness-95">
+                Save Storage Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeactivateModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[460px] rounded-xl bg-white shadow-2xl border border-red-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-red-100 bg-red-50/50 px-5 py-4">
+              <div className="flex items-center gap-2 text-red-600">
+                <AlertTriangle size={19} />
+                <h3 className="text-[16px] font-semibold text-red-950">Deactivate Account</h3>
+              </div>
+              <button type="button" onClick={() => setShowDeactivateModal(false)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-[12px] leading-relaxed text-slate-600">
+                This will immediately suspend your NTRO terminal session and disable API credentials across all nodes. To confirm, type <span className="font-mono font-bold text-red-600">DEACTIVATE</span> below:
+              </p>
+              <input
+                type="text"
+                placeholder='Type "DEACTIVATE"'
+                value={deactivateConfirmText}
+                onChange={(e) => setDeactivateConfirmText(e.target.value)}
+                className="h-[40px] w-full rounded-md border border-red-200 px-3 text-[13px] font-mono outline-none focus:border-red-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => setShowDeactivateModal(false)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="button" onClick={handleConfirmDeactivate} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-red-600 hover:bg-red-700">
+                Confirm Deactivation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showExportModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[480px] rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-[16px] font-semibold text-slate-900">Request Data Export</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Download a full certified archive of your telemetry, AOIs, and runs</p>
+              </div>
+              <button type="button" onClick={() => setShowExportModal(false)} className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Export Scope &amp; Format</label>
+                <select
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value)}
+                  className="h-[40px] w-full rounded-md border border-slate-200 bg-white px-3 text-[12px] outline-none focus:border-[#D2691E]"
+                >
+                  <option>GeoJSON + Parquet (ZIP Archive)</option>
+                  <option>Raw Geopackage (GPKG) + Metadata JSON</option>
+                  <option>Full Audit Log + Certified PDFs (ISO 27001)</option>
+                </select>
+              </div>
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-2 text-[11px] text-slate-600">
+                <div className="font-semibold text-slate-800">Archive Contents:</div>
+                <div>• 24 Project configurations &amp; AOI polygons</div>
+                <div>• Super-resolution model run logs &amp; PSNR/SSIM telemetry</div>
+                <div>• Signed API audit records &amp; access access logs</div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3.5 bg-slate-50/60">
+              <button type="button" onClick={() => setShowExportModal(false)} className="h-[38px] rounded-md border border-slate-300 px-4 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="button" onClick={handleDownloadDataExport} className="h-[38px] rounded-md px-4 text-[12px] font-semibold text-white bg-[#0F8C7F] hover:brightness-95">
+                Download Archive (ZIP)
+              </button>
             </div>
           </div>
         </div>

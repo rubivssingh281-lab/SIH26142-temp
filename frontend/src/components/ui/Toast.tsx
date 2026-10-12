@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, AlertTriangle, Info, Loader2, X } from "lucide-react";
 
-export type ToastKind = "success" | "error" | "info" | "loading";
+export type ToastKind = "success" | "error" | "info" | "loading" | "warning";
 export interface ToastItem { id: number; message: string; kind: ToastKind; }
 
 type Listener = (items: ToastItem[]) => void;
@@ -36,12 +36,13 @@ export function dismiss(id: number): void {
   emit();
 }
 
-const ICON = { success: CheckCircle2, error: AlertTriangle, info: Info, loading: Loader2 };
+const ICON = { success: CheckCircle2, error: AlertTriangle, info: Info, loading: Loader2, warning: AlertTriangle };
 const TONE: Record<ToastKind, string> = {
   success: "text-success",
   error: "text-danger",
   info: "text-teal",
   loading: "text-primary",
+  warning: "text-amber-500",
 };
 
 export function Toaster() {

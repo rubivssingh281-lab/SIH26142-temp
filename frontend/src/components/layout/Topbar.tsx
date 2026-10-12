@@ -22,10 +22,14 @@ import {
   Briefcase,
   FolderPlus,
   X,
+  Mail,
+  Send,
 } from "lucide-react";
 import { CURRENT_USER, PROJECTS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/Toast";
+import { api } from "@/lib/api";
+
 
 const CRUMBS: Record<string, string[]> = {
   "/dashboard": ["Projects", "Ladakh Border Infrastructure", "SR_v2", "Dashboard"],
@@ -113,6 +117,25 @@ export function Topbar() {
   const [projectSearch, setProjectSearch] = useState("");
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
   const [notifTab, setNotifTab] = useState<"all" | "unread">("all");
+  const [testingSmtp, setTestingSmtp] = useState(false);
+
+  // Load live notifications from backend API
+  const refreshNotifications = async () => {
+    try {
+      const data = await api.notifications.list();
+      if (Array.isArray(data) && data.length > 0) {
+        setNotifications(data);
+      }
+    } catch {
+      // Keep existing local notifications
+    }
+  };
+
+  useEffect(() => {
+    refreshNotifications();
+    const interval = setInterval(refreshNotifications, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Load saved project preference on mount
   useEffect(() => {
@@ -171,6 +194,9 @@ export function Topbar() {
 
   const toggleMenu = (menu: MenuType) => {
     setOpenMenu((prev) => (prev === menu ? null : menu));
+    if (menu === "notifications") {
+      refreshNotifications();
+    }
   };
 
   const handleSelectProject = (projectName: string) => {
@@ -180,28 +206,55 @@ export function Topbar() {
     toast(`Active project switched to "${projectName}"`, "info");
   };
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await api.notifications.markAllRead();
+    } catch {}
     toast("All notifications marked as read", "success");
   };
 
-  const handleNotificationClick = (item: NotificationItem) => {
+  const handleNotificationClick = async (item: NotificationItem) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
     );
+    try {
+      await api.notifications.markRead(item.id);
+    } catch {}
     setOpenMenu(null);
     router.push(item.href);
   };
 
-  const dismissNotification = (id: string) => {
+  const dismissNotification = async (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await api.notifications.dismiss(id);
+    } catch {}
   };
 
-  const clearAllNotifications = () => {
+  const clearAllNotifications = async () => {
     setNotifications([]);
     setOpenMenu(null);
+    try {
+      await api.notifications.markAllRead();
+    } catch {}
     toast("All notifications cleared", "info");
   };
+
+  const handleTestSmtp = async () => {
+    if (testingSmtp) return;
+    setTestingSmtp(true);
+    try {
+      const res = await api.notifications.sendTest();
+      toast(res.message || "Live SMTP test notification delivered!", "success");
+      await refreshNotifications();
+    } catch (e: any) {
+      toast(e?.message || "Failed to dispatch test notification", "error");
+    } finally {
+      setTestingSmtp(false);
+    }
+  };
+
 
   return (
     <header
@@ -375,15 +428,26 @@ export function Topbar() {
                       </span>
                     )}
                   </div>
-                  {unreadCount > 0 && (
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={markAllAsRead}
-                      className="inline-flex items-center gap-1 text-[11.5px] font-medium text-primary hover:underline"
+                      onClick={handleTestSmtp}
+                      disabled={testingSmtp}
+                      className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10.5px] font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-60"
+                      title="Dispatch live SMTP test email via backend relay"
                     >
-                      <CheckCheck size={14} /> Mark all read
+                      <Mail size={12} /> {testingSmtp ? "Sending…" : "Test SMTP"}
                     </button>
-                  )}
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={markAllAsRead}
+                        className="inline-flex items-center gap-1 text-[11.5px] font-medium text-primary hover:underline"
+                      >
+                        <CheckCheck size={14} /> Mark all read
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Filter tabs */}
