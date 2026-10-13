@@ -1,4 +1,4 @@
-# Bhu-Dristi
+# Bhu-Dristi (SIH26142-TEAM ORCAS)
 
 **Deep Learning Based Super Resolution Mapping (SRM) from Medium Resolution Satellite Imageries**
 Smart India Hackathon 2026 · Problem Statement **26142** · **NTRO** · Category: Software · Theme: Space Technology
@@ -170,11 +170,6 @@ macOS and Windows.
 overlays; end-to-end job pipeline with metrics + uncertainty + export bundle.
 **Out of scope (V1):** authentication/multi-tenant, streaming ingestion, global mosaicking,
 automated building/road detection, multi-temporal fusion SR (see the spec's advanced-features list).
-
-## Team
-
-6 members — 2 Frontend · 2 Backend · 2 ML/Data.
-
 ---
 
 *Bhu-Dristi is built for NTRO's Problem Statement 26142. It processes only synthetic/open sample
