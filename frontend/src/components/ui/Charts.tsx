@@ -42,7 +42,7 @@ export function Sparkline({
   const area = `${line} L${width},${height} L0,${height} Z`;
   const gid = `sg-${color.replace("#", "")}`;
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="overflow-hidden max-w-full block">
       {fill && (
         <>
           <defs>

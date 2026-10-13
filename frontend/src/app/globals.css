@@ -1,3 +1,4 @@
+@import "leaflet/dist/leaflet.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -54,6 +55,13 @@ body {
   .auth-input {
     @apply w-full bg-transparent text-[14.5px] text-ink outline-none placeholder:text-muted/70;
   }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 .satellite-fade {
@@ -91,3 +99,19 @@ main > div { animation: fade-in-up 0.28s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   main > div, .animate-toast-in, .card { animation: none !important; transition: none !important; }
 }
+
+/* Prevent outer document scrolling while dragging/interacting with Leaflet map */
+.leaflet-container,
+.leaflet-pane,
+.leaflet-map-pane,
+.leaflet-tile-pane,
+.leaflet-layer,
+.leaflet-marker-pane,
+.leaflet-overlay-pane,
+.aoi-map-viewport {
+  touch-action: none !important;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: contain !important;
+}
+

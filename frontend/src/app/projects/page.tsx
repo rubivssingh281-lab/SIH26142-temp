@@ -73,38 +73,47 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 pr-6 sm:pr-8 space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-4">
-        <h1 className="text-[24px] font-semibold text-ink">All Projects</h1>
-        <div className="relative flex-1 min-w-[240px] max-w-[420px]">
-          <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-          <input className="input pl-10" placeholder="Search projects..." value={q} onChange={(e) => setQ(e.target.value)} />
+    <div className="p-2.5 sm:p-6 space-y-3 sm:space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+      {/* Header: Title + Create Button on top, compact filters below */}
+      <div className="flex items-center justify-between gap-2 sm:hidden">
+        <h1 className="text-[18px] font-semibold text-ink">All Projects</h1>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg bg-primary text-white text-[11.5px] font-semibold shadow-sm"
+        >
+          <Plus size={14} /> New Project
+        </button>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-2 sm:gap-4">
+        <h1 className="text-[24px] font-semibold text-ink hidden sm:block">All Projects</h1>
+        <div className="relative flex-1 min-w-0 sm:min-w-[200px] max-w-full sm:max-w-[360px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+          <input className="input pl-9 h-9 sm:h-11 text-[12px] sm:text-[14px]" placeholder="Search projects..." value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <div>
-          <div className="text-[11.5px] text-muted mb-0.5">Sort by</div>
+        <div className="flex items-center gap-2">
           <div className="relative">
-            <select className="select w-[160px]"><option>Recent</option><option>Name</option><option>Area</option></select>
-            <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+            <select className="select w-[130px] sm:w-[150px] h-9 sm:h-11 text-[12px] sm:text-[14px]"><option>Recent</option><option>Name</option><option>Area</option></select>
+            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
           </div>
-        </div>
-        <div className="inline-flex rounded-lg border border-line-strong p-1 gap-1 self-end">
-          <button onClick={() => setView("grid")} className={cn("h-9 w-9 grid place-items-center rounded-md", view === "grid" ? "bg-primary-50 text-primary" : "text-muted")}><LayoutGrid size={17} /></button>
-          <button onClick={() => setView("list")} className={cn("h-9 w-9 grid place-items-center rounded-md", view === "list" ? "bg-primary-50 text-primary" : "text-muted")}><List size={17} /></button>
+          <div className="inline-flex rounded-lg border border-line-strong p-0.5 sm:p-1 gap-1 shrink-0">
+            <button onClick={() => setView("grid")} className={cn("h-7 w-7 sm:h-9 sm:w-9 grid place-items-center rounded-md", view === "grid" ? "bg-primary-50 text-primary" : "text-muted")}><LayoutGrid size={15} /></button>
+            <button onClick={() => setView("list")} className={cn("h-7 w-7 sm:h-9 sm:w-9 grid place-items-center rounded-md", view === "list" ? "bg-primary-50 text-primary" : "text-muted")}><List size={15} /></button>
+          </div>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="self-end inline-flex items-center gap-2 h-11 px-4 rounded-lg bg-primary hover:bg-primary-hover text-white text-[14px] font-semibold shadow-sm transition"
+          className="hidden sm:inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg bg-primary hover:bg-primary-hover text-white text-[13.5px] sm:text-[14px] font-semibold shadow-sm transition sm:ml-auto"
         >
           <Plus size={17} /> Create New Project
         </button>
       </div>
 
-      {/* Category pills */}
-      <div className="flex flex-wrap gap-2">
+      {/* Category pills (swipeable horizontally on mobile) */}
+      <div className="flex overflow-x-auto no-scrollbar gap-1.5 sm:gap-2 pb-1 -mx-2.5 px-2.5 sm:mx-0 sm:px-0">
         {PROJECT_CATEGORIES.map((c) => (
           <button key={c} onClick={() => { setCategory(c); setPage(1); }}
-            className={cn("h-9 px-4 rounded-lg text-[13.5px] font-medium border transition",
+            className={cn("h-7 sm:h-9 px-2.5 sm:px-4 rounded-lg text-[11.5px] sm:text-[13.5px] font-medium border transition shrink-0 whitespace-nowrap",
               category === c ? "bg-primary text-white border-primary" : "bg-surface text-ink-soft border-line hover:bg-canvas")}>
             {c}
           </button>

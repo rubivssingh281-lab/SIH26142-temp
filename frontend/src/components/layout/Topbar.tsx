@@ -24,6 +24,7 @@ import {
   X,
   Mail,
   Send,
+  Menu,
 } from "lucide-react";
 import { CURRENT_USER, PROJECTS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
@@ -107,7 +108,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
 
 type MenuType = "project" | "notifications" | "user" | null;
 
-export function Topbar() {
+export function Topbar({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const topbarRef = useRef<HTMLDivElement>(null);
@@ -259,10 +260,26 @@ export function Topbar() {
   return (
     <header
       ref={topbarRef}
-      className="h-[76px] shrink-0 sticky top-0 z-30 bg-surface/95 backdrop-blur border-b border-line flex items-center px-6 gap-4"
+      className="h-16 sm:h-[76px] shrink-0 sticky top-0 z-30 bg-surface/95 backdrop-blur border-b border-line flex items-center px-3.5 sm:px-6 gap-2 sm:gap-4"
     >
-      {/* Breadcrumbs */}
-      <nav className="flex items-center gap-2 text-[14px] min-w-0">
+      {/* Mobile Hamburger button */}
+      <button
+        type="button"
+        onClick={onOpenMobileMenu}
+        className="lg:hidden p-2 -ml-1.5 rounded-lg text-ink-soft hover:bg-canvas hover:text-ink transition shrink-0"
+        aria-label="Open navigation menu"
+      >
+        <Menu size={21} />
+      </button>
+
+      {/* Mobile Current Page Title */}
+      <div className="sm:hidden font-semibold text-[15px] text-ink truncate min-w-0 flex items-center gap-1.5">
+        <Home size={15} className="text-muted shrink-0" />
+        <span className="truncate">{crumbs[crumbs.length - 1]}</span>
+      </div>
+
+      {/* Desktop Breadcrumbs */}
+      <nav className="hidden sm:flex items-center gap-2 text-[14px] min-w-0">
         <Home size={17} className="text-muted shrink-0" />
         {crumbs.map((c, i) => {
           const last = i === crumbs.length - 1;
@@ -301,7 +318,7 @@ export function Topbar() {
           </button>
 
           {openMenu === "project" && (
-            <div className="absolute right-0 top-full mt-2 w-[340px] sm:w-[380px] rounded-xl border border-line bg-surface shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+            <div className="fixed inset-x-3 top-[68px] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full mt-1 sm:mt-2 w-auto sm:w-[380px] max-w-[calc(100vw-24px)] rounded-xl border border-line bg-surface shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-line">
                 <div className="flex items-center gap-2">
                   <Briefcase size={16} className="text-primary" />
@@ -412,7 +429,7 @@ export function Topbar() {
           </button>
 
           {openMenu === "notifications" && (
-            <div className="absolute right-0 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 top-full mt-2 w-[340px] sm:w-[420px] rounded-xl border border-line bg-surface shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="fixed inset-x-3 top-[68px] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full mt-1 sm:mt-2 w-auto sm:w-[420px] max-w-[calc(100vw-24px)] rounded-xl border border-line bg-surface shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
               {/* Header */}
               <div className="p-3.5 border-b border-line bg-canvas/30">
                 <div className="flex items-center justify-between">
@@ -595,7 +612,7 @@ export function Topbar() {
           </button>
 
           {openMenu === "user" && (
-            <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-line bg-surface shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+            <div className="fixed inset-x-3 top-[68px] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full mt-1 sm:mt-2 w-auto sm:w-72 max-w-[calc(100vw-24px)] rounded-xl border border-line bg-surface shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
               {/* User Identity Card */}
               <div className="p-3 rounded-lg bg-canvas/60 border border-line mb-2">
                 <div className="flex items-center gap-3">

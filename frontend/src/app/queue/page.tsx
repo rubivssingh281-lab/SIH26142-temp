@@ -44,51 +44,99 @@ export default function QueuePage() {
   const { stats, jobs, cluster } = data;
 
   return (
-    <div className="p-4 sm:p-6 pr-6 sm:pr-8 space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <QueueStat title="Queued" value={stats.queued} sub="Jobs waiting" icon={<Clock size={22} className="text-warning-soft" />} bg="bg-warning-bg" />
-        <Card className="p-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="text-[13px] text-muted flex items-center gap-2"><span className="h-8 w-8 rounded-lg bg-teal-50 grid place-items-center"><Boxes size={18} className="text-teal" /></span>Processing</div>
-              <div className="text-[30px] font-semibold mt-1">{stats.processing}</div>
-              <div className="text-[12.5px] text-muted">Active jobs</div>
+    <div className="p-2.5 sm:p-6 space-y-3 sm:space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+      {/* Stat cards: sideways scrollable on mobile */}
+      <div className="flex overflow-x-auto gap-2 pb-1 snap-x snap-mandatory no-scrollbar sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4 -mx-2.5 px-2.5 sm:mx-0 sm:px-0">
+        <div className="w-[130px] sm:w-auto shrink-0 snap-start">
+          <QueueStat title="Queued" value={stats.queued} sub="Jobs waiting" icon={<Clock size={16} className="text-warning-soft sm:hidden" />} bg="bg-warning-bg" />
+        </div>
+        <Card className="w-[150px] sm:w-auto shrink-0 snap-start p-2.5 sm:p-4">
+          <div className="flex items-start justify-between gap-1">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] sm:text-[13px] text-muted flex items-center gap-1 truncate">
+                <span className="h-6 w-6 sm:h-8 sm:w-8 rounded-md sm:rounded-lg bg-teal-50 grid place-items-center shrink-0">
+                  <Boxes size={14} className="text-teal" />
+                </span>
+                Active
+              </div>
+              <div className="text-[18px] sm:text-[30px] font-semibold mt-0.5 sm:mt-1">{stats.processing}</div>
+              <div className="text-[10px] sm:text-[12.5px] text-muted truncate">Running jobs</div>
             </div>
-            <div className="text-center">
-              <Donut value={stats.avg_progress_pct} size={56} color="#0F8C7F" />
-              <div className="text-[11px] text-muted mt-1">Avg. Progress</div>
+            <div className="text-center shrink-0">
+              <Donut value={stats.avg_progress_pct} size={36} color="#0F8C7F" />
+              <div className="text-[9px] sm:text-[11px] text-muted mt-0.5">{stats.avg_progress_pct}%</div>
             </div>
           </div>
         </Card>
-        <QueueStat title="Completed Today" value={stats.completed_today} sub="Jobs completed" icon={<CheckCircle2 size={22} className="text-success" />} bg="bg-success-bg" />
-        <QueueStat title="Failed" value={stats.failed} sub="Jobs failed" icon={<AlertOctagon size={22} className="text-danger" />} bg="bg-danger-bg" />
+        <div className="w-[130px] sm:w-auto shrink-0 snap-start">
+          <QueueStat title="Completed" value={stats.completed_today} sub="Today" icon={<CheckCircle2 size={16} className="text-success sm:hidden" />} bg="bg-success-bg" />
+        </div>
+        <div className="w-[130px] sm:w-auto shrink-0 snap-start">
+          <QueueStat title="Failed" value={stats.failed} sub="Errors" icon={<AlertOctagon size={16} className="text-danger sm:hidden" />} bg="bg-danger-bg" />
+        </div>
       </div>
 
-      {/* Filters */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[220px]">
-            <div className="relative">
-              <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-              <input className="input pl-10" placeholder="Search by Job ID or Project" value={q} onChange={(e) => setQ(e.target.value)} />
+      {/* Filters: Sideways status pills + compact 2-col inputs */}
+      <Card className="p-2.5 sm:p-4">
+        {/* Horizontal Status Filter Pills on mobile */}
+        <div className="flex overflow-x-auto gap-1.5 pb-2 no-scrollbar border-b border-line mb-2.5 sm:hidden">
+          {[
+            ["all", "All"],
+            ["processing", `Processing (${stats.processing})`],
+            ["queued", `Queued (${stats.queued})`],
+            ["completed", `Done (${stats.completed_today})`],
+            ["failed", `Failed (${stats.failed})`],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setStatus(key)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors shrink-0",
+                status === key
+                  ? "bg-primary text-white"
+                  : "bg-surface border border-line text-ink-soft hover:bg-canvas"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3">
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <input className="input pl-9 h-9 sm:h-11 text-[12px] sm:text-[14px]" placeholder="Search Job ID or Project" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            <button onClick={refetch} className="h-9 w-9 sm:h-11 sm:w-11 grid place-items-center rounded-lg border border-line-strong hover:bg-canvas transition shrink-0" title="Refresh queue">
+              <RefreshCw size={15} className="text-ink-soft" />
+            </button>
+          </div>
+
+          {/* Sideways 2-column secondary filters on mobile */}
+          <div className="grid grid-cols-2 sm:flex sm:items-end gap-2 sm:gap-3">
+            <div className="hidden sm:block">
+              <FilterSelect label="Status" value={status} onChange={setStatus} options={[["all", "All"], ["processing", "Processing"], ["queued", "Queued"], ["completed", "Completed"], ["failed", "Failed"]]} />
+            </div>
+            <div>
+              <FilterSelect label="Project" value="all" onChange={() => {}} options={[["all", "All Projects"], ["ladakh", "Ladakh"], ["arunachal", "Arunachal"], ["siachen", "Siachen"]]} />
+            </div>
+            <div>
+              <div className="field-label text-[11px] sm:text-[13px] mb-1">Date Range</div>
+              <button className="input flex items-center gap-1.5 w-full sm:w-[200px] h-9 sm:h-11 text-[11.5px] sm:text-[13px] px-2.5">
+                <Calendar size={13} className="text-muted shrink-0" />
+                <span className="truncate">May 18 - 21</span>
+              </button>
             </div>
           </div>
-          <FilterSelect label="Status" value={status} onChange={setStatus} options={[["all", "All"], ["processing", "Processing"], ["queued", "Queued"], ["completed", "Completed"], ["failed", "Failed"]]} />
-          <FilterSelect label="Project" value="all" onChange={() => {}} options={[["all", "All Projects"]]} />
-          <div>
-            <div className="field-label">Date Range</div>
-            <button className="input flex items-center gap-2 w-[220px]"><Calendar size={16} className="text-muted" /> May 18, 2024 - May 21, 2024</button>
-          </div>
-          <button onClick={refetch} className="h-11 w-11 grid place-items-center rounded-lg border border-line-strong hover:bg-canvas transition"><RefreshCw size={17} className="text-ink-soft" /></button>
         </div>
       </Card>
 
       {/* Main split */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-5 min-w-0">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4 sm:gap-5 min-w-0">
         <Card className="p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full min-w-[720px] text-[13px]">
               <thead>
                 <tr className="text-left text-muted border-b border-line bg-canvas/40">
                   <th className="px-4 py-3 font-medium">Job ID</th>
@@ -320,13 +368,13 @@ function Row({ label, value }: { label: string; value: string }) {
 
 function QueueStat({ title, value, sub, icon, bg }: { title: string; value: number; sub: string; icon: React.ReactNode; bg: string }) {
   return (
-    <Card className="p-4">
-      <div className="flex items-start gap-3">
-        <div className={cn("h-11 w-11 rounded-xl grid place-items-center shrink-0", bg)}>{icon}</div>
-        <div>
-          <div className="text-[13px] text-muted">{title}</div>
-          <div className="text-[30px] font-semibold leading-tight">{value}</div>
-          <div className="text-[12.5px] text-muted">{sub}</div>
+    <Card className="p-2.5 sm:p-4 h-full">
+      <div className="flex items-start gap-2 sm:gap-3">
+        <div className={cn("h-7 w-7 sm:h-11 sm:w-11 rounded-md sm:rounded-xl grid place-items-center shrink-0", bg)}>{icon}</div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] sm:text-[13px] text-muted truncate">{title}</div>
+          <div className="text-[18px] sm:text-[30px] font-semibold leading-tight mt-0.5">{value}</div>
+          <div className="text-[10px] sm:text-[12.5px] text-muted truncate">{sub}</div>
         </div>
       </div>
     </Card>
@@ -336,12 +384,12 @@ function QueueStat({ title, value, sub, icon, bg }: { title: string; value: numb
 function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
   return (
     <div>
-      <div className="field-label">{label}</div>
+      <div className="field-label text-[11px] sm:text-[13px] mb-1">{label}</div>
       <div className="relative">
-        <select className="select w-[180px]" value={value} onChange={(e) => onChange(e.target.value)}>
+        <select className="select w-full sm:w-[180px] h-9 sm:h-11 text-[11.5px] sm:text-[13px] px-2.5" value={value} onChange={(e) => onChange(e.target.value)}>
           {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+        <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
       </div>
     </div>
   );

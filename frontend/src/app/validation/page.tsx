@@ -75,15 +75,15 @@ function ValidationInner() {
   if (!data) return null;
 
   return (
-    <div className="p-4 sm:p-6 pr-6 sm:pr-8 space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
       {/* Header controls */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-end gap-5">
-          <div>
+      <Card className="p-3.5 sm:p-4">
+        <div className="flex flex-wrap items-end gap-3 sm:gap-5">
+          <div className="w-full sm:w-auto">
             <div className="field-label">Report for Job ID</div>
             <div className="relative">
               <select
-                className="select w-[240px]"
+                className="select w-full sm:w-[240px]"
                 value={jobId}
                 onChange={(e) => router.push(`/validation?job=${e.target.value}`)}
               >
@@ -94,11 +94,11 @@ function ValidationInner() {
               <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             </div>
           </div>
-          <div>
+          <div className="w-full sm:w-auto">
             <div className="field-label">Compare Against</div>
             <div className="relative">
               <select
-                className="select w-[260px]"
+                className="select w-full sm:w-[260px]"
                 defaultValue={data.compare_against}
                 onChange={(e) => toast(`Reference baseline updated to ${e.target.value}. Recalculating task metrics...`, "info")}
               >
@@ -109,39 +109,43 @@ function ValidationInner() {
               <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             </div>
           </div>
-          <div>
+          <div className="w-full sm:w-auto">
             <div className="field-label">Date of Validation</div>
             <button
               onClick={() => toast(`Audit stamp verified: ${data.validated_at}`, "info")}
-              className="input flex items-center gap-2 w-[240px] hover:border-primary transition text-left"
+              className="input flex items-center gap-2 w-full sm:w-[240px] hover:border-primary transition text-left"
               title="Click to view cryptographic validation audit stamp"
             >
-              <Calendar size={16} className="text-muted" /> {data.validated_at}
+              <Calendar size={16} className="text-muted shrink-0" /> <span className="truncate">{data.validated_at}</span>
             </button>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2 sm:ml-auto">
             <button
               onClick={() => emailReport(data.job_id)}
               disabled={emailing}
-              className="inline-flex items-center gap-2 h-11 px-4 rounded-lg border border-[#0F8C7F] text-[#0F8C7F] text-[14px] font-medium hover:bg-[#0F8C7F]/5 transition disabled:opacity-60 disabled:cursor-not-allowed"
-              title="Deliver validation report directly to operator email via SMTP"
+              className="inline-flex items-center justify-center gap-1 h-8 sm:h-11 px-2 sm:px-4 rounded-lg border border-[#0F8C7F] text-[#0F8C7F] text-[11.5px] sm:text-[14px] font-medium hover:bg-[#0F8C7F]/5 transition disabled:opacity-60 whitespace-nowrap"
+              title="Deliver validation report directly via SMTP"
             >
-              <Mail size={16} /> {emailing ? "Delivering…" : "Email Report (SMTP)"}
+              <Mail size={14} /> {emailing ? "Delivering…" : "Email (SMTP)"}
             </button>
             <button
               onClick={() => exportReport(data.job_id)}
               disabled={exporting}
-              className="inline-flex items-center gap-2 h-11 px-4 rounded-lg bg-primary text-white text-[14px] font-medium hover:bg-primary-hover transition disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-1 h-8 sm:h-11 px-2.5 sm:px-4 rounded-lg bg-primary text-white text-[11.5px] sm:text-[14px] font-medium hover:bg-primary-hover transition disabled:opacity-60 whitespace-nowrap"
             >
-              <Download size={16} /> {exporting ? "Generating…" : "Export Report (PDF)"}
+              <Download size={14} /> {exporting ? "Generating…" : "Export PDF"}
             </button>
           </div>
         </div>
       </Card>
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {data.metrics.map((m) => <MetricCard key={m.key} m={m} />)}
+      {/* Metric cards: sideways swipeable on mobile */}
+      <div className="flex overflow-x-auto gap-2 pb-1 snap-x snap-mandatory no-scrollbar sm:grid sm:grid-cols-3 lg:grid-cols-5 sm:gap-4 -mx-2.5 px-2.5 sm:mx-0 sm:px-0">
+        {data.metrics.map((m) => (
+          <div key={m.key} className="w-[135px] sm:w-auto shrink-0 snap-start">
+            <MetricCard m={m} />
+          </div>
+        ))}
       </div>
 
       {/* Three panels */}
@@ -283,15 +287,15 @@ function ValidationInner() {
 function MetricCard({ m }: { m: ValidationMetric }) {
   const up = m.delta_dir === "up";
   return (
-    <Card className="p-4">
-      <div className="flex items-center gap-1 text-[13px] text-muted">{m.label} <Info size={12} /></div>
-      <div className="flex items-end justify-between mt-1">
-        <div className="text-[26px] font-semibold text-ink leading-none">{m.value}<span className="text-[14px] text-muted ml-0.5">{m.unit}</span></div>
-        <span className={cn("inline-flex items-center gap-0.5 text-[12.5px] font-medium", up ? "text-success" : "text-primary")}>
-          {up ? <ArrowUp size={13} /> : <ArrowDown size={13} />} {m.delta}
+    <Card className="p-2.5 sm:p-4 h-full">
+      <div className="flex items-center gap-1 text-[11px] sm:text-[13px] text-muted truncate">{m.label} <Info size={11} className="shrink-0" /></div>
+      <div className="flex items-end justify-between mt-1 gap-1">
+        <div className="text-[18px] sm:text-[26px] font-semibold text-ink leading-none">{m.value}<span className="text-[11px] sm:text-[14px] text-muted ml-0.5">{m.unit}</span></div>
+        <span className={cn("inline-flex items-center gap-0.5 text-[10.5px] sm:text-[12.5px] font-medium shrink-0", up ? "text-success" : "text-primary")}>
+          {up ? <ArrowUp size={12} /> : <ArrowDown size={12} />} {m.delta}
         </span>
       </div>
-      <div className="my-2"><Sparkline data={m.trend} width={200} height={30} color="#0F8C7F" /></div>
+      <div className="my-1.5 sm:my-2"><Sparkline data={m.trend} width={90} height={20} color="#0F8C7F" /></div>
       <RatingChip rating={m.rating} />
     </Card>
   );

@@ -93,15 +93,15 @@ function ComparisonInner() {
   if (!data) return null;
 
   return (
-    <div className="p-4 sm:p-6 pr-6 sm:pr-8 space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-2.5 sm:p-6 space-y-3 sm:space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
       {/* Control bar */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-end gap-5">
-          <div>
-            <div className="field-label">Job ID</div>
+      <Card className="p-2.5 sm:p-4">
+        <div className="flex flex-wrap items-end gap-2.5 sm:gap-5">
+          <div className="w-full sm:w-auto">
+            <div className="field-label text-[11px] sm:text-[13px] mb-1">Job ID</div>
             <div className="relative">
               <select
-                className="select w-[240px]"
+                className="select w-full sm:w-[240px] h-9 sm:h-11 text-[12px] sm:text-[14px]"
                 value={jobId}
                 onChange={(e) => router.push(`/comparison?job=${e.target.value}`)}
               >
@@ -109,60 +109,54 @@ function ComparisonInner() {
                 <option value="SR_v2_20240521_0800">SR_v2_20240521_0800 (Arunachal)</option>
                 <option value="SR_v2_20240521_1145">SR_v2_20240521_1145 (Siachen)</option>
               </select>
-              <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             </div>
           </div>
 
-          <div>
-            <div className="field-label">View Mode</div>
-            <div className="inline-flex rounded-lg border border-line-strong p-1 gap-1">
+          <div className="w-full sm:w-auto overflow-x-auto no-scrollbar">
+            <div className="field-label text-[11px] sm:text-[13px] mb-1">View Mode</div>
+            <div className="inline-flex rounded-lg border border-line-strong p-0.5 sm:p-1 gap-1">
               {VIEW_MODES.map((m) => {
                 const Icon = m.icon;
                 return (
                   <button key={m.key} onClick={() => setMode(m.key)}
-                    className={cn("inline-flex items-center gap-1.5 px-3 h-8 rounded-md text-[13px] transition",
+                    className={cn("inline-flex items-center gap-1 px-2 sm:px-3 h-7 sm:h-8 rounded-md text-[11px] sm:text-[13px] whitespace-nowrap transition",
                       mode === m.key ? "bg-primary-50 text-primary font-medium" : "text-ink-soft hover:bg-canvas")}>
-                    <Icon size={15} /> {m.label}
+                    <Icon size={13} className="shrink-0" /> {m.label}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div>
-            <div className="field-label">Zoom</div>
+          <div className="hidden sm:block">
+            <div className="field-label text-[11px] sm:text-[13px] mb-1">Zoom</div>
             <div className="inline-flex rounded-lg border border-line-strong p-1 gap-1">
               {["25%", "100%", "200%"].map((z) => (
                 <button key={z} onClick={() => setZoom(z)}
-                  className={cn("px-3 h-8 rounded-md text-[13px] transition", zoom === z ? "bg-primary-50 text-primary font-medium" : "text-ink-soft hover:bg-canvas")}>
+                  className={cn("px-2.5 sm:px-3 h-7 sm:h-8 rounded-md text-[12px] sm:text-[13px] transition", zoom === z ? "bg-primary-50 text-primary font-medium" : "text-ink-soft hover:bg-canvas")}>
                   {z}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div>
-              <div className="field-label flex items-center gap-1">Sync Pan &amp; Zoom <Info size={13} className="text-muted" /></div>
-              <Toggle checked={sync} onChange={setSync} />
-            </div>
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
+          {/* Action buttons: 2-column side-by-side on mobile */}
+          <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2 sm:ml-auto">
             <button
               onClick={() => emailSnapshot(jobId)}
               disabled={emailingSnapshot}
-              className="inline-flex items-center gap-2 h-11 px-4 rounded-lg border border-[#0F8C7F] text-[#0F8C7F] text-[14px] font-medium hover:bg-[#0F8C7F]/5 transition disabled:opacity-60 disabled:cursor-not-allowed"
-              title="Deliver comparison snapshot directly to operator email via SMTP"
+              className="inline-flex items-center justify-center gap-1 h-8 sm:h-11 px-2 sm:px-4 rounded-lg border border-[#0F8C7F] text-[#0F8C7F] text-[11.5px] sm:text-[14px] font-medium hover:bg-[#0F8C7F]/5 transition disabled:opacity-60 whitespace-nowrap"
+              title="Deliver snapshot via SMTP"
             >
-              <Mail size={16} /> {emailingSnapshot ? "Delivering…" : "Email Snapshot (SMTP)"}
+              <Mail size={14} /> {emailingSnapshot ? "Sending…" : "Email (SMTP)"}
             </button>
             <button
               onClick={() => exportSnapshot(jobId)}
               disabled={exporting}
-              className="inline-flex items-center gap-2 h-11 px-4 rounded-lg bg-primary text-white text-[14px] font-medium hover:bg-primary-hover transition disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-1 h-8 sm:h-11 px-2.5 sm:px-4 rounded-lg bg-primary text-white text-[11.5px] sm:text-[14px] font-medium hover:bg-primary-hover transition disabled:opacity-60 whitespace-nowrap"
             >
-              <Download size={16} /> {exporting ? "Rendering…" : "Export Snapshot"}
+              <Download size={14} /> {exporting ? "Rendering…" : "Export PDF"}
             </button>
           </div>
         </div>
@@ -175,7 +169,7 @@ function ComparisonInner() {
           <div
             ref={viewport}
             className={cn(
-              "relative h-[440px] rounded-xl overflow-hidden select-none bg-[#3a3a2c] touch-none",
+              "relative h-[320px] sm:h-[440px] rounded-xl overflow-hidden select-none bg-[#3a3a2c] touch-none",
               mode === "slider" && "cursor-ew-resize"
             )}
             onPointerDown={(e) => {
@@ -251,21 +245,21 @@ function ComparisonInner() {
             </div>
           </Card>
 
-          {/* Quality metrics */}
-          <Card className="p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h4 className="text-[14px] font-semibold">Quality Metrics (vs. Reference / Best Available)</h4>
+          {/* Quality metrics: sideways swipeable on mobile */}
+          <Card className="p-2.5 sm:p-4">
+            <div className="flex items-center gap-1.5 mb-2 sm:mb-3">
+              <h4 className="text-[13px] sm:text-[14px] font-semibold">Quality Metrics</h4>
               <Info size={13} className="text-muted" />
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="flex overflow-x-auto gap-2 pb-1 snap-x snap-mandatory no-scrollbar sm:grid sm:grid-cols-2 md:grid-cols-4 sm:gap-3 -mx-2.5 px-2.5 sm:mx-0 sm:px-0">
               {data.metrics.map((m) => (
-                <div key={m.key} className="rounded-lg border-l-[3px] border-teal bg-canvas/40 p-3">
+                <div key={m.key} className="w-[120px] sm:w-auto shrink-0 snap-start rounded-lg border-l-[3px] border-teal bg-canvas/40 p-2 sm:p-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[12.5px] text-muted flex items-center gap-1">{m.label} <Info size={12} /></span>
-                    {m.pass && <CheckCircle2 size={17} className="text-white fill-success" />}
+                    <span className="text-[11px] sm:text-[12.5px] text-muted flex items-center gap-1">{m.label}</span>
+                    {m.pass && <CheckCircle2 size={14} className="text-white fill-success shrink-0" />}
                   </div>
-                  <div className="text-[22px] font-semibold mt-1">{m.value}</div>
-                  <div className="text-[11px] text-muted">Threshold: {m.threshold}</div>
+                  <div className="text-[17px] sm:text-[22px] font-semibold mt-0.5">{m.value}</div>
+                  <div className="text-[10px] sm:text-[11px] text-muted truncate">Limit: {m.threshold}</div>
                 </div>
               ))}
             </div>
@@ -352,9 +346,9 @@ function ComparisonInner() {
 
 function ImgLabel({ title, sub, className }: { title: string; sub: string; className?: string }) {
   return (
-    <div className={cn("absolute rounded-md bg-black/55 px-3 py-1.5 text-white z-[1]", className)}>
-      <div className="text-[12.5px] font-medium">{title}</div>
-      <div className="text-[11px] text-white/80">{sub}</div>
+    <div className={cn("absolute rounded-md bg-black/60 px-2 sm:px-3 py-1 sm:py-1.5 text-white z-[1] max-w-[48%] pointer-events-none", className)}>
+      <div className="text-[10.5px] sm:text-[12.5px] font-medium truncate">{title}</div>
+      <div className="text-[9.5px] sm:text-[11px] text-white/80 truncate">{sub}</div>
     </div>
   );
 }

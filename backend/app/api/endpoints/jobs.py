@@ -6,6 +6,7 @@ import logging
 from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Request, UploadFile, File, Query, Depends, HTTPException
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from pydantic import BaseModel
@@ -95,16 +96,27 @@ async def submit_job(request: Request, db: AsyncSession = Depends(get_db)):
         return {"job_id": job_id, "status": "queued"}
 
     # Branch 2: JSON payload from Frontend wizard (NewJobPayload)
+    if "application/json" not in content_type and "multipart/form-data" not in content_type:
+        raise RequestValidationError([{"loc": ["body"], "msg": "Field required", "type": "missing"}])
     try:
         body = await request.json()
     except Exception:
-        body = {}
+        raise RequestValidationError([{"loc": ["body"], "msg": "Invalid JSON", "type": "value_error.json"}])
+    if not body:
+        raise RequestValidationError([{"loc": ["body"], "msg": "Field required", "type": "missing"}])
     project = body.get("project", "Ladakh Border Infrastructure")
     job_name = body.get("job_name", "SR_v2_job")
     model = body.get("model", "gan").upper()
     target_res = body.get("target_resolution_m", 2.5)
     source = body.get("satellite_source", "sentinel-2")
     bands = body.get("bands", ["RGB", "NIR"])
+    aoi_coordinates = body.get("aoi_coordinates", [])
+    try:
+        area_km2 = round(float(body.get("area_km2", 12.64)), 2)
+    except (ValueError, TypeError):
+        area_km2 = 12.64
+    location = str(body.get("location", "34.2345° N, 77.5612° E"))
+    bounds = body.get("bounds", None)
 
     stamp = datetime.datetime.now().strftime("%Y%m%d")
     rand = random.randint(1000, 8999)
@@ -117,6 +129,7 @@ async def submit_job(request: Request, db: AsyncSession = Depends(get_db)):
     new_job = {
         "job_id": job_id,
         "project": project,
+        "job_name": job_name,
         "status": "processing",
         "date": date_str,
         "resolution_gain": f"4x (10m → {target_res}m)",
@@ -130,6 +143,10 @@ async def submit_job(request: Request, db: AsyncSession = Depends(get_db)):
         "tiles_processed": 240,
         "tiles_total": 1280,
         "throughput_mbps": 320,
+        "area_km2": area_km2,
+        "location": location,
+        "aoi_coordinates": aoi_coordinates,
+        "bounds": bounds,
         "stages": [
             {"name": "Pre-processing", "state": "completed", "detail": "Completed · Cloud masking passed"},
             {"name": "Model Inference", "state": "in_progress", "detail": f"In Progress ({model})", "progress": 25},
@@ -147,8 +164,8 @@ async def submit_job(request: Request, db: AsyncSession = Depends(get_db)):
     data_service.DASHBOARD["recent_job"] = {
         "job_id": job_id,
         "status": "processing",
-        "area_km2": 12.6,
-        "location": "34.2345° N, 77.5612° E",
+        "area_km2": area_km2,
+        "location": location,
         "acquisition_date": date_str,
         "model": f"TerraSharp v2.1 ({model})",
         "resolution_gain": f"4x (10m → {target_res}m)",
@@ -177,7 +194,7 @@ async def submit_job(request: Request, db: AsyncSession = Depends(get_db)):
         "id": f"notif-{job_id}",
         "type": "info",
         "title": f"Job {job_id} Scheduled",
-        "message": f"Inference job created for {project} (Sensor: {source}, Target: {target_res}m).",
+        "message": f"Inference job created for {project} ({location}, {area_km2} km² · Sensor: {source}).",
         "time": "Just now",
         "read": False,
         "href": f"/queue",

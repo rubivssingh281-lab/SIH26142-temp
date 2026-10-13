@@ -259,6 +259,9 @@ export interface NewJobPayload {
   target_resolution_m: number;
   bands: string[];
   aoi_coordinates: number[][];
+  area_km2?: number;
+  location?: string;
+  bounds?: number[][];
 }
 
 /* --------------------------------------------------------------------- Settings */

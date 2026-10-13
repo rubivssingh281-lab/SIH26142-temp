@@ -886,10 +886,33 @@ function SettingsContent() {
   }
 
   return (
-    <div className="p-4 sm:p-6 pr-6 sm:pr-8 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
-      <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-5 min-w-0">
-        {/* Settings sub-nav */}
-        <Card className="p-2 h-fit shrink-0">
+    <div className="p-3.5 sm:p-6 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-4 sm:gap-5 min-w-0">
+        {/* Mobile Horizontal Subnav (< lg) */}
+        <div className="lg:hidden flex overflow-x-auto no-scrollbar gap-1.5 p-1 bg-surface border border-line rounded-xl shrink-0">
+          {SETTINGS_NAV.map((n) => {
+            const Icon = n.icon;
+            const active = nav === n.key;
+            return (
+              <button
+                key={n.key}
+                onClick={() => setNav(n.key)}
+                className={cn(
+                  "shrink-0 flex items-center gap-2 rounded-lg px-3 h-9 text-[13px] font-medium transition whitespace-nowrap",
+                  active
+                    ? "bg-primary-50 text-primary font-semibold shadow-xs"
+                    : "text-ink-soft hover:bg-canvas hover:text-ink"
+                )}
+              >
+                <Icon size={15} />
+                <span>{n.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Desktop Vertical Subnav (>= lg) */}
+        <Card className="hidden lg:block p-2 h-fit shrink-0">
           {SETTINGS_NAV.map((n) => {
             const Icon = n.icon;
             const active = nav === n.key;

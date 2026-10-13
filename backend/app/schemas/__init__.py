@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel, Field
 
 class JobStatus(str, Enum):
@@ -260,7 +261,10 @@ class NewJobPayload(BaseModel):
     model: ModelType
     target_resolution_m: float
     bands: list[str]
-    aoi_coordinates: list[list[float]]
+    aoi_coordinates: list[list[float]] = []
+    area_km2: Optional[float] = 12.64
+    location: Optional[str] = "34.2345° N, 77.5612° E"
+    bounds: Optional[list[list[float]]] = None
 
 class NewJobEstimate(BaseModel):
     area_km2: float
