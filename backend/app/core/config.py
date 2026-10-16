@@ -1,7 +1,7 @@
 from typing import List, Optional
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import AnyHttpUrl
+from pydantic import AnyHttpUrl, Field
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Bhu-Dristi API"
@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     INFERENCE_FACTORY: Optional[str] = None
     JOB_TIMEOUT_SECONDS: int = 3600
 
+    # Database URL override (e.g. Supabase Session Pooler: postgresql://...)
+    RAW_DATABASE_URL: Optional[str] = Field(default=None, alias="DATABASE_URL")
+
     # PostgreSQL Database
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_USER: str = "postgres"
@@ -35,11 +38,23 @@ class Settings(BaseSettings):
     
     @property
     def DATABASE_URL(self) -> str:
+        if self.RAW_DATABASE_URL:
+            raw = self.RAW_DATABASE_URL
+            if raw.startswith("postgresql://"):
+                return raw.replace("postgresql://", "postgresql+asyncpg://", 1)
+            if raw.startswith("sqlite://") and not raw.startswith("sqlite+aiosqlite://"):
+                return raw.replace("sqlite://", "sqlite+aiosqlite://", 1)
+            return raw
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
     
     @property
     def SYNC_DATABASE_URL(self) -> str:
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        if self.RAW_DATABASE_URL:
+            raw = self.RAW_DATABASE_URL
+            if raw.startswith("postgresql://"):
+                return raw.replace("postgresql://", "postgresql+psycopg2://", 1)
+            return raw
+        return f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     # Redis (Broker & Cache)
     REDIS_HOST: str = "localhost"
@@ -72,13 +87,52 @@ class Settings(BaseSettings):
     OIDC_AUDIENCE: str = "account"
     OIDC_JWKS_URL: Optional[str] = None
     AUTH_ENABLED: bool = False
+
+    # Supabase Auth HTTPS Dispatch & Database Relay
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_ANON_KEY: Optional[str] = None
+
+    # JWT Authentication & Passwords
+    SECRET_KEY: str = "bhudristi-enterprise-secret-key-super-resolution-2026"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+
+    @property
+    def access_token_expire_minutes(self) -> int:
+        return self.ACCESS_TOKEN_EXPIRE_MINUTES
     
-    # SMTP / OTP Auth
+    # SMTP / OTP Auth (Supports Gmail SMTP & Supabase Custom SMTP relay)
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
-    SMTP_USER: str = "example@gmail.com"
+    SMTP_USER: str = "bhudhristi@gmail.com"
     SMTP_PASSWORD: str = ""
-    SMTP_FROM_EMAIL: str = "example@gmail.com"
+    SMTP_FROM_EMAIL: str = "bhudhristi@gmail.com"
+
+    # Universal guide & Supabase aliases
+    MAIL_SERVER: Optional[str] = None
+    MAIL_PORT: Optional[int] = None
+    MAIL_USERNAME: Optional[str] = None
+    MAIL_PASSWORD: Optional[str] = None
+    MAIL_FROM: Optional[str] = None
+
+    @property
+    def effective_smtp_host(self) -> str:
+        return self.MAIL_SERVER or self.SMTP_HOST
+
+    @property
+    def effective_smtp_port(self) -> int:
+        return self.MAIL_PORT or self.SMTP_PORT
+
+    @property
+    def effective_smtp_user(self) -> str:
+        return self.MAIL_USERNAME or self.SMTP_USER
+
+    @property
+    def effective_smtp_password(self) -> str:
+        return self.MAIL_PASSWORD or self.SMTP_PASSWORD
+
+    @property
+    def effective_smtp_from(self) -> str:
+        return self.MAIL_FROM or self.SMTP_FROM_EMAIL or self.effective_smtp_user
     
     # Sentry & Observability
     SENTRY_DSN: Optional[str] = None
@@ -87,6 +141,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[2] / ".env",
         case_sensitive=True,
+        populate_by_name=True,
         extra="ignore",
     )
 

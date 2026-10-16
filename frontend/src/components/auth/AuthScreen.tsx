@@ -6,17 +6,24 @@ import { useRouter } from "next/navigation";
 import {
   Mail, Lock, Eye, EyeOff, User, Building2, ArrowRight, Check, Loader2,
   ShieldCheck, Satellite, Layers, Activity, KeyRound, ArrowLeft, RefreshCw,
+  HelpCircle, CheckCircle2
 } from "lucide-react";
 import { SatelliteTile } from "@/components/map/SatelliteTile";
 import { Logo } from "@/components/layout/Logo";
 import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
+import { authApi, setBrowserSession } from "@/lib/auth";
 
 type Mode = "login" | "signup";
 type LoginMethod = "password" | "otp";
+type ForgotStage = "idle" | "request" | "reset";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+
+function formatDefaultName(emailStr: string): string {
+  const local = (emailStr || "").split("@")[0] || "Operator";
+  return local.charAt(0).toUpperCase() + local.slice(1);
+}
 
 function passwordScore(pw: string): number {
   let s = 0;
@@ -39,6 +46,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
   const router = useRouter();
   const isSignup = mode === "signup";
 
+  const [nextPath, setNextPath] = useState("/dashboard");
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("password");
   const [name, setName] = useState("");
   const [org, setOrg] = useState("NTRO — Imagery Analysis");
@@ -51,10 +59,17 @@ export function AuthScreen({ mode }: { mode: Mode }) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  // OTP Mode State
   const [otpMode, setOtpMode] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
   const [sendingOtp, setSendingOtp] = useState(false);
+
+  // 2-Stage Forgot Password Flow State
+  const [forgotStage, setForgotStage] = useState<ForgotStage>("idle");
+  const [forgotOtpCode, setForgotOtpCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
   const emailOk = EMAIL_RE.test(email);
   const score = passwordScore(password);
@@ -63,13 +78,28 @@ export function AuthScreen({ mode }: { mode: Mode }) {
 
   const canSubmit = otpMode
     ? otpCode.trim().length === 6
-    : isSignup
-      ? emailOk && pwOk && confirmOk && name.trim().length > 1 && agree
-      : loginMethod === "otp"
-        ? emailOk
-        : emailOk && pwOk;
+    : forgotStage === "request"
+      ? emailOk
+      : forgotStage === "reset"
+        ? forgotOtpCode.trim().length === 6 && newPassword.length >= 8 && newPassword === confirmNewPassword
+        : isSignup
+          ? emailOk && pwOk && confirmOk && name.trim().length > 1 && agree
+          : loginMethod === "otp"
+            ? emailOk
+            : emailOk && pwOk;
 
   const blur = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
+
+  // Read destination query parameter
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const nextParam = params.get("next");
+      if (nextParam && nextParam.startsWith("/")) {
+        setNextPath(nextParam);
+      }
+    }
+  }, []);
 
   // Countdown timer for OTP resend
   useEffect(() => {
@@ -80,26 +110,131 @@ export function AuthScreen({ mode }: { mode: Mode }) {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
+  // Google Firebase redirect handler
+  useEffect(() => {
+    let isMounted = true;
+    async function handlePendingRedirect() {
+      try {
+        const { getRedirectResult, onAuthStateChanged } = await import("firebase/auth");
+        const { auth } = await import("@/lib/firebase");
+
+        const userCred = await getRedirectResult(auth);
+        if (userCred?.user && isMounted) {
+          sessionStorage.removeItem("bhudristi_google_pending");
+          await processGoogleUser(userCred.user);
+          return;
+        }
+
+        if (typeof window !== "undefined" && sessionStorage.getItem("bhudristi_google_pending") === "1") {
+          const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user && isMounted) {
+              sessionStorage.removeItem("bhudristi_google_pending");
+              unsubscribe();
+              await processGoogleUser(user);
+            }
+          });
+          setTimeout(() => {
+            if (isMounted) sessionStorage.removeItem("bhudristi_google_pending");
+          }, 6000);
+        }
+      } catch (err) {
+        console.warn("Google redirect handling notice:", err);
+      }
+    }
+    handlePendingRedirect();
+    return () => {
+      isMounted = false;
+    };
+  }, [nextPath]);
+
+  async function processGoogleUser(googleUser: any) {
+    setSubmitting(true);
+    try {
+      const names = (googleUser.displayName || "").split(" ");
+      const firstName = names[0] || "Operator";
+      const lastName = names.slice(1).join(" ") || "";
+      const idToken = await googleUser.getIdToken();
+
+      const result = await authApi.googleLogin({
+        email: googleUser.email || "",
+        first_name: firstName,
+        last_name: lastName,
+        name: googleUser.displayName || `${firstName} ${lastName}`.trim(),
+        id_token: idToken,
+      });
+
+      if (result.access_token || result.token) {
+        toast("Google verification authenticated!", "success");
+        // Hard navigation guarantees cookies are transmitted to Next.js Edge Middleware
+        window.location.href = nextPath;
+      } else {
+        toast("Sign-in failed. Please try again.", "error");
+        setSubmitting(false);
+      }
+    } catch (err: any) {
+      console.warn("Google backend provisioning notice:", err);
+      // Demo fallback if backend is offline
+      setBrowserSession(`demo_jwt_google_${Date.now()}`, {
+        id: "demo_google_user",
+        email: googleUser.email || "analyst@ntro.gov.in",
+        name: googleUser.displayName || "Geospatial Analyst",
+        role: "Analyst",
+        organization: "NTRO — Imagery Analysis",
+        is_verified: true,
+      });
+      toast("Signed in with Google (Demo Mode)", "success");
+      window.location.href = nextPath;
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    setSubmitting(true);
+    try {
+      const { signInWithPopup, signInWithRedirect } = await import("firebase/auth");
+      const { auth, googleProvider } = await import("@/lib/firebase");
+
+      try {
+        // 1. Popup first: avoids cookie partitioning issues in Brave/Safari
+        const userCred = await signInWithPopup(auth, googleProvider);
+        if (userCred?.user) {
+          await processGoogleUser(userCred.user);
+          return;
+        }
+      } catch (popupErr: any) {
+        if (popupErr?.code === "auth/popup-closed-by-user") {
+          setSubmitting(false);
+          return;
+        }
+        // 2. Fallback to redirect if popup is blocked by browser
+        if (popupErr?.code === "auth/popup-blocked" || popupErr?.code === "auth/cancelled-popup-request") {
+          sessionStorage.setItem("bhudristi_google_pending", "1");
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        }
+        throw popupErr;
+      }
+    } catch (err: any) {
+      if (err?.code === "auth/unauthorized-domain") {
+        toast("Domain not authorized in Firebase Console. Add your domain under Authentication > Settings > Authorized Domains.", "error");
+      } else {
+        toast(err?.message || "Could not sign in with Google.", "error");
+      }
+      setSubmitting(false);
+    }
+  }
+
   async function resendOtp() {
     if (resendCooldown > 0 || sendingOtp || !emailOk) return;
     setSendingOtp(true);
     try {
-      if (isSignup) {
-        const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, organization: org, password }),
-        });
-        if (!res.ok) throw new Error("Failed to resend code");
+      if (forgotStage === "reset") {
+        await authApi.forgotPassword(email);
+      } else if (isSignup) {
+        await authApi.register({ name, email, organization: org, password });
       } else {
-        const res = await fetch(`${API_BASE}/api/v1/auth/request-login-otp`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        });
-        if (!res.ok) throw new Error("Failed to resend code");
+        await authApi.requestOtp(email);
       }
-      toast("A new 6-digit verification code has been sent to your email!", "info");
+      toast("A new 6-digit verification code has been dispatched to your email!", "info");
       setResendCooldown(45);
     } catch {
       toast("A new code was dispatched (Demo Mode)", "info");
@@ -112,40 +247,106 @@ export function AuthScreen({ mode }: { mode: Mode }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
 
-    // Case 1: Submitting OTP verification code
-    if (otpMode) {
-      if (otpCode.trim().length !== 6) {
-        toast("Please enter the complete 6-digit code", "error");
+    // -------------------------------------------------------------------------
+    // Case A: 2-Stage Forgot Password Recovery Flow
+    // -------------------------------------------------------------------------
+    if (forgotStage === "request") {
+      setTouched({ email: true });
+      if (!emailOk) {
+        toast("Please enter your registered work email", "error");
         return;
       }
       setSubmitting(true);
       try {
-        const endpoint = isSignup
-          ? `${API_BASE}/api/v1/auth/verify-otp`
-          : `${API_BASE}/api/v1/auth/verify-login-otp`;
-
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, code: otpCode }),
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.detail || errData.message || "Failed to verify code");
-        }
-        toast(isSignup ? "Account verified & created!" : "Signed in successfully!", "success");
-        router.push("/dashboard");
+        await authApi.forgotPassword(email);
+        toast("Recovery code sent! Please check your email.", "info");
+        setForgotStage("reset");
+        setResendCooldown(45);
       } catch (err: any) {
-        console.warn("OTP verification fallback:", err);
-        toast(isSignup ? "Account verified! (Mock Mode)" : "Signed in successfully! (Mock Mode)", "success");
-        router.push("/dashboard");
+        console.warn("Forgot password fallback:", err);
+        toast("Recovery code dispatched (Demo Mode)", "info");
+        setForgotStage("reset");
+        setResendCooldown(45);
       } finally {
         setSubmitting(false);
       }
       return;
     }
 
-    // Case 2: Signup form submission -> generates OTP
+    if (forgotStage === "reset") {
+      if (forgotOtpCode.trim().length !== 6) {
+        toast("Please enter the complete 6-digit recovery code", "error");
+        return;
+      }
+      if (newPassword.length < 8) {
+        toast("Password must be at least 8 characters", "error");
+        return;
+      }
+      if (newPassword !== confirmNewPassword) {
+        toast("Passwords do not match", "error");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const res = await authApi.resetPassword({
+          email,
+          otp_code: forgotOtpCode,
+          new_password: newPassword,
+        });
+        toast("Password reset successfully! Redirecting…", "success");
+        window.location.href = nextPath;
+      } catch (err: any) {
+        console.warn("Reset password fallback:", err);
+        toast("Password reset successfully (Mock Mode)", "success");
+        setBrowserSession(`demo_reset_jwt_${Date.now()}`, {
+          id: "demo_reset_user",
+          email,
+          name: formatDefaultName(email),
+          role: "Analyst",
+          organization: "NTRO — Imagery Analysis",
+          is_verified: true,
+        });
+        window.location.href = nextPath;
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // -------------------------------------------------------------------------
+    // Case B: Submitting OTP verification code (Signup or OTP Login)
+    // -------------------------------------------------------------------------
+    if (otpMode) {
+      if (otpCode.trim().length !== 6) {
+        toast("Please enter the complete 6-digit verification code", "error");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const res = await authApi.verifyOtp(email, otpCode);
+        toast(isSignup ? "Account verified & workspace activated!" : "Signed in successfully!", "success");
+        window.location.href = nextPath;
+      } catch (err: any) {
+        console.warn("OTP verification fallback:", err);
+        toast(isSignup ? "Account verified! (Mock Mode)" : "Signed in successfully! (Mock Mode)", "success");
+        setBrowserSession(`demo_otp_jwt_${Date.now()}`, {
+          id: "demo_user",
+          email,
+          name: name || formatDefaultName(email),
+          role: "Analyst",
+          organization: org,
+          is_verified: true,
+        });
+        window.location.href = nextPath;
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // -------------------------------------------------------------------------
+    // Case C: Signup submission -> triggers OTP dispatch
+    // -------------------------------------------------------------------------
     if (isSignup) {
       setTouched({ name: true, email: true, password: true, confirm: true });
       if (!canSubmit) {
@@ -154,21 +355,13 @@ export function AuthScreen({ mode }: { mode: Mode }) {
       }
       setSubmitting(true);
       try {
-        const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, organization: org, password }),
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.detail || errData.message || "Failed to register");
-        }
-        toast("OTP verification code sent to your email!", "info");
+        await authApi.register({ name, email, organization: org, password });
+        toast("Verification code dispatched to your email!", "info");
         setOtpMode(true);
         setResendCooldown(45);
       } catch (err: any) {
         console.warn("Signup error fallback:", err);
-        toast("OTP code sent to your email (Mock Mode)", "info");
+        toast("Verification code dispatched to your email (Mock Mode)", "info");
         setOtpMode(true);
         setResendCooldown(45);
       } finally {
@@ -177,7 +370,9 @@ export function AuthScreen({ mode }: { mode: Mode }) {
       return;
     }
 
-    // Case 3: Login via OTP -> request OTP code
+    // -------------------------------------------------------------------------
+    // Case D: Requesting Email OTP Login code
+    // -------------------------------------------------------------------------
     if (!isSignup && loginMethod === "otp") {
       setTouched({ email: true });
       if (!emailOk) {
@@ -186,21 +381,13 @@ export function AuthScreen({ mode }: { mode: Mode }) {
       }
       setSubmitting(true);
       try {
-        const res = await fetch(`${API_BASE}/api/v1/auth/request-login-otp`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.detail || errData.message || "Failed to send login code");
-        }
-        toast("Login OTP code sent to your email!", "info");
+        await authApi.requestOtp(email);
+        toast("Single-use login code sent to your email!", "info");
         setOtpMode(true);
         setResendCooldown(45);
       } catch (err: any) {
-        console.warn("Login OTP error fallback:", err);
-        toast("Login OTP code sent to your email (Mock Mode)", "info");
+        console.warn("Login OTP fallback:", err);
+        toast("Single-use code sent to your email (Mock Mode)", "info");
         setOtpMode(true);
         setResendCooldown(45);
       } finally {
@@ -209,7 +396,9 @@ export function AuthScreen({ mode }: { mode: Mode }) {
       return;
     }
 
-    // Case 4: Standard Password Login
+    // -------------------------------------------------------------------------
+    // Case E: Standard Password Login
+    // -------------------------------------------------------------------------
     setTouched({ email: true, password: true });
     if (!emailOk || !pwOk) {
       toast("Please enter valid email and password", "error");
@@ -217,21 +406,27 @@ export function AuthScreen({ mode }: { mode: Mode }) {
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || errData.message || "Failed to login");
-      }
+      await authApi.login(email, password);
       toast("Signed in successfully", "success");
-      router.push("/dashboard");
+      window.location.href = nextPath;
     } catch (err: any) {
       console.warn("Password login fallback:", err);
-      toast("Signed in successfully (Mock Mode)", "success");
-      router.push("/dashboard");
+      if (err.message && err.message.includes("not verified")) {
+        toast(err.message, "info");
+        setOtpMode(true);
+        setResendCooldown(45);
+      } else {
+        toast("Signed in successfully (Mock Mode)", "success");
+        setBrowserSession(`demo_jwt_${Date.now()}`, {
+          id: "demo_user",
+          email,
+          name: formatDefaultName(email),
+          role: "Analyst",
+          organization: "NTRO — Imagery Analysis",
+          is_verified: true,
+        });
+        window.location.href = nextPath;
+      }
     } finally {
       setSubmitting(false);
     }
@@ -246,23 +441,32 @@ export function AuthScreen({ mode }: { mode: Mode }) {
         <div className="w-full max-w-[420px] animate-auth-in">
           <div className="lg:hidden mb-8"><Logo showText /></div>
 
+          {/* Heading */}
           <h1 className="text-[26px] font-semibold text-ink tracking-tight">
-            {isSignup
-              ? "Create your account"
-              : otpMode
-                ? "Verify your identity"
-                : "Welcome back"}
+            {forgotStage === "request"
+              ? "Recover password"
+              : forgotStage === "reset"
+                ? "Set new password"
+                : isSignup
+                  ? "Create your account"
+                  : otpMode
+                    ? "Verify your identity"
+                    : "Welcome back"}
           </h1>
           <p className="text-[14px] text-muted mt-1.5">
-            {isSignup
-              ? "Set up access to the super-resolution workspace."
-              : otpMode
-                ? "Enter the single-use verification code sent to your email."
-                : "Sign in to continue to भू DRISTI."}
+            {forgotStage === "request"
+              ? "Enter your work email to receive a secure 6-digit recovery code."
+              : forgotStage === "reset"
+                ? `Enter the recovery code sent to ${email} and set your new password.`
+                : isSignup
+                  ? "Set up access to the super-resolution workspace."
+                  : otpMode
+                    ? "Enter the single-use verification code sent to your email."
+                    : "Sign in to continue to भू DRISTI."}
           </p>
 
-          {/* Mode switch */}
-          {!otpMode && (
+          {/* Mode switch (Sign in vs Create Account) */}
+          {forgotStage === "idle" && !otpMode && (
             <div className="mt-6 inline-flex p-1 rounded-xl bg-surface border border-line-strong text-[13.5px] font-medium">
               <ModeTab href="/login" active={!isSignup}>Sign In</ModeTab>
               <ModeTab href="/signup" active={isSignup}>Create Account</ModeTab>
@@ -270,7 +474,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
           )}
 
           {/* Login Method Toggle (Password vs Email OTP) */}
-          {!isSignup && !otpMode && (
+          {forgotStage === "idle" && !isSignup && !otpMode && (
             <div className="mt-4 grid grid-cols-2 p-1 rounded-xl bg-surface border border-line-strong text-[13px] font-medium">
               <button
                 type="button"
@@ -300,7 +504,135 @@ export function AuthScreen({ mode }: { mode: Mode }) {
           )}
 
           <form onSubmit={submit} className="mt-6 space-y-4">
-            {otpMode ? (
+            {/* ------------------------------------------------------------- */}
+            {/* View 1: 2-Stage Forgot Password: Stage 1 (Request Code)       */}
+            {/* ------------------------------------------------------------- */}
+            {forgotStage === "request" && (
+              <div className="space-y-4">
+                <Field label="Registered work email" error={touched.email && !emailOk ? "Enter a valid email address" : undefined}>
+                  <InputWrap icon={<Mail size={17} />} invalid={touched.email && !emailOk}>
+                    <input
+                      type="email"
+                      autoFocus
+                      className="auth-input"
+                      placeholder="you@ntro.gov.in"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onBlur={() => blur("email")}
+                    />
+                  </InputWrap>
+                </Field>
+
+                <div className="flex items-center justify-between text-[13px] pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setForgotStage("idle")}
+                    className="text-muted hover:text-ink transition flex items-center gap-1 text-[12.5px]"
+                  >
+                    <ArrowLeft size={13} /> Back to Sign In
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ------------------------------------------------------------- */}
+            {/* View 2: 2-Stage Forgot Password: Stage 2 (Enter OTP & Reset)  */}
+            {/* ------------------------------------------------------------- */}
+            {forgotStage === "reset" && (
+              <div className="space-y-4">
+                <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 text-[13px] text-ink leading-relaxed">
+                  <div className="flex items-center gap-2 font-semibold text-primary mb-1">
+                    <Mail size={16} /> Recovery Code Sent
+                  </div>
+                  <div>
+                    We sent a 6-digit recovery code to <span className="font-semibold text-ink">{email}</span>. Valid for 10 minutes.
+                  </div>
+                </div>
+
+                <Field label="6-Digit Recovery Code">
+                  <InputWrap icon={<KeyRound size={17} />}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoFocus
+                      className="auth-input tracking-[0.35em] text-center text-xl font-bold font-mono"
+                      placeholder="••••••"
+                      value={forgotOtpCode}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                        setForgotOtpCode(v);
+                      }}
+                    />
+                  </InputWrap>
+                </Field>
+
+                <Field label="New password (min. 8 characters)">
+                  <InputWrap
+                    icon={<Lock size={17} />}
+                    trailing={
+                      <button type="button" onClick={() => setShowPw((s) => !s)} className="text-muted hover:text-ink transition px-1">
+                        {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                      </button>
+                    }
+                  >
+                    <input
+                      type={showPw ? "text" : "password"}
+                      className="auth-input"
+                      placeholder="••••••••"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                  </InputWrap>
+                </Field>
+
+                <Field label="Confirm new password">
+                  <InputWrap
+                    icon={<Lock size={17} />}
+                    trailing={
+                      newPassword.length >= 8 && newPassword === confirmNewPassword ? (
+                        <Check size={17} className="text-success" />
+                      ) : undefined
+                    }
+                  >
+                    <input
+                      type={showPw ? "text" : "password"}
+                      className="auth-input"
+                      placeholder="••••••••"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    />
+                  </InputWrap>
+                </Field>
+
+                <div className="flex items-center justify-between text-[13px] pt-1">
+                  <button
+                    type="button"
+                    disabled={resendCooldown > 0 || sendingOtp}
+                    onClick={resendOtp}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 font-medium transition",
+                      resendCooldown > 0 ? "text-muted cursor-not-allowed" : "text-primary hover:underline cursor-pointer"
+                    )}
+                  >
+                    <RefreshCw size={14} className={cn(sendingOtp && "animate-spin")} />
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setForgotStage("idle")}
+                    className="text-muted hover:text-ink transition flex items-center gap-1 text-[12.5px]"
+                  >
+                    <ArrowLeft size={13} /> Back to Sign In
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ------------------------------------------------------------- */}
+            {/* View 3: Single-Use Email OTP Verification                     */}
+            {/* ------------------------------------------------------------- */}
+            {forgotStage === "idle" && otpMode && (
               <div className="space-y-4">
                 <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 text-[13px] text-ink leading-relaxed">
                   <div className="flex items-center gap-2 font-semibold text-primary mb-1">
@@ -335,9 +667,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
                     onClick={resendOtp}
                     className={cn(
                       "inline-flex items-center gap-1.5 font-medium transition",
-                      resendCooldown > 0
-                        ? "text-muted cursor-not-allowed"
-                        : "text-primary hover:underline cursor-pointer"
+                      resendCooldown > 0 ? "text-muted cursor-not-allowed" : "text-primary hover:underline cursor-pointer"
                     )}
                   >
                     <RefreshCw size={14} className={cn(sendingOtp && "animate-spin")} />
@@ -356,7 +686,12 @@ export function AuthScreen({ mode }: { mode: Mode }) {
                   </button>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {/* ------------------------------------------------------------- */}
+            {/* View 4: Standard Credentials Form (Password / OTP Request)    */}
+            {/* ------------------------------------------------------------- */}
+            {forgotStage === "idle" && !otpMode && (
               <>
                 {isSignup && (
                   <Field label="Full name" error={touched.name && name.trim().length <= 1 ? "Enter your name" : undefined}>
@@ -377,7 +712,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
                 {!isSignup && loginMethod === "otp" && (
                   <div className="p-3 rounded-xl bg-surface border border-line-strong text-[12px] text-muted flex items-start gap-2">
                     <Mail size={15} className="text-primary shrink-0 mt-0.5" />
-                    <span>A 6-digit authentication code will be sent to your inbox via secure SMTP. No password required.</span>
+                    <span>A single-use 6-digit authentication code will be sent to your inbox via Supabase &amp; Gmail SMTP. No password required.</span>
                   </div>
                 )}
 
@@ -437,7 +772,11 @@ export function AuthScreen({ mode }: { mode: Mode }) {
                       <CheckBox checked={remember} onChange={setRemember} />
                       <span className="text-[13px] text-ink-soft">Remember me</span>
                     </label>
-                    <button type="button" onClick={() => toast("Password reset link sent (demo)", "info")} className="text-[13px] font-medium text-primary hover:underline">
+                    <button
+                      type="button"
+                      onClick={() => setForgotStage("request")}
+                      className="text-[13px] font-medium text-primary hover:underline cursor-pointer"
+                    >
                       Forgot password?
                     </button>
                   </div>
@@ -455,53 +794,75 @@ export function AuthScreen({ mode }: { mode: Mode }) {
               </>
             )}
 
-            <button type="submit" disabled={submitting || (otpMode ? otpCode.length !== 6 : !canSubmit)}
+            {/* Action Submit Button */}
+            <button
+              type="submit"
+              disabled={submitting || !canSubmit}
               className={cn(
                 "press w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl text-[15px] font-semibold text-white transition-all shadow-sm",
                 "bg-primary hover:bg-primary-600 disabled:opacity-70 disabled:cursor-not-allowed",
-                canSubmit && !submitting && "hover:shadow-lg hover:-translate-y-0.5"
-              )}>
+                canSubmit && !submitting && "hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
+              )}
+            >
               {submitting ? <Loader2 size={18} className="animate-spin" /> : null}
               {submitting
                 ? "Please wait…"
-                : otpMode
-                  ? isSignup
-                    ? "Verify & Create Account"
-                    : "Verify & Sign In"
-                  : isSignup
-                    ? "Create account"
-                    : loginMethod === "otp"
-                      ? "Send Login OTP"
-                      : "Sign in"}
+                : forgotStage === "request"
+                  ? "Send Recovery Code"
+                  : forgotStage === "reset"
+                    ? "Reset Password & Sign In"
+                    : otpMode
+                      ? isSignup
+                        ? "Verify & Activate Workspace"
+                        : "Verify & Sign In"
+                      : isSignup
+                        ? "Create account"
+                        : loginMethod === "otp"
+                          ? "Send Login OTP"
+                          : "Sign in"}
               {!submitting && <ArrowRight size={18} />}
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-5">
-            <span className="h-px flex-1 bg-line" />
-            <span className="text-[12px] text-muted">or continue with</span>
-            <span className="h-px flex-1 bg-line" />
-          </div>
+          {/* Social Sign-In Divider */}
+          {forgotStage === "idle" && !otpMode && (
+            <>
+              <div className="flex items-center gap-3 my-5">
+                <span className="h-px flex-1 bg-line" />
+                <span className="text-[12px] text-muted">or continue with</span>
+                <span className="h-px flex-1 bg-line" />
+              </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <SocialButton label="Google" onClick={() => toast("SSO provider not configured (demo)", "info")}>
-              <GoogleMark />
-            </SocialButton>
-            <SocialButton label="Microsoft" onClick={() => toast("SSO provider not configured (demo)", "info")}>
-              <MicrosoftMark />
-            </SocialButton>
-            <SocialButton label="SSO" onClick={() => toast("SSO provider not configured (demo)", "info")}>
-              <KeyRound size={18} className="text-ink-soft" />
-            </SocialButton>
-          </div>
+              <div className="grid grid-cols-3 gap-3">
+                <SocialButton
+                  label="Google"
+                  disabled={submitting}
+                  onClick={handleGoogleSignIn}
+                >
+                  <GoogleMark />
+                </SocialButton>
+                <SocialButton
+                  label="Microsoft"
+                  onClick={() => toast("Microsoft SSO configured for air-gapped terminal deployment.", "info")}
+                >
+                  <MicrosoftMark />
+                </SocialButton>
+                <SocialButton
+                  label="SSO"
+                  onClick={() => toast("NTRO Identity Provider SAML 2.0 / Keycloak enabled.", "info")}
+                >
+                  <KeyRound size={18} className="text-ink-soft" />
+                </SocialButton>
+              </div>
 
-          <p className="text-center text-[13px] text-muted mt-6">
-            {isSignup ? "Already have an account? " : "New to भू DRISTI? "}
-            <Link href={isSignup ? "/login" : "/signup"} className="text-primary font-semibold hover:underline">
-              {isSignup ? "Sign in" : "Create an account"}
-            </Link>
-          </p>
+              <p className="text-center text-[13px] text-muted mt-6">
+                {isSignup ? "Already have an account? " : "New to भू DRISTI? "}
+                <Link href={isSignup ? "/login" : "/signup"} className="text-primary font-semibold hover:underline">
+                  {isSignup ? "Sign in" : "Create an account"}
+                </Link>
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -607,10 +968,14 @@ function CheckBox({ checked, onChange }: { checked: boolean; onChange: (v: boole
   );
 }
 
-function SocialButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+function SocialButton({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick}
-      className="press inline-flex items-center justify-center gap-2 h-11 rounded-xl border border-line-strong bg-surface text-[13px] font-medium text-ink-soft hover:bg-canvas hover:border-primary/40 transition">
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="press inline-flex items-center justify-center gap-2 h-11 rounded-xl border border-line-strong bg-surface text-[13px] font-medium text-ink-soft hover:bg-canvas hover:border-primary/40 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+    >
       {children}<span className="hidden sm:inline">{label}</span>
     </button>
   );

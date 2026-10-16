@@ -20,6 +20,9 @@
 backend/.venv/
 **/.venv/
 **/venv/
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs & OS cruft
 *.log

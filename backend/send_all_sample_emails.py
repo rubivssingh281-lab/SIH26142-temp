@@ -465,6 +465,41 @@ dispatches = [
             )
         ),
     },
+
+    # -------------------------------------------------------------
+    # 17. PASSWORD RECOVERY AUTHORIZATION OTP (Styled Digit Boxes)
+    # -------------------------------------------------------------
+    {
+        "index": 17,
+        "name": "Password Recovery Authorization Code (OTP)",
+        "category": "Platform Authentication & Security",
+        "func": lambda: send_styled_otp_email(
+            email=TARGET_RECIPIENT,
+            code="472910",
+            purpose="recovery",
+        ),
+    },
+
+    # -------------------------------------------------------------
+    # 18. SATELLITE JOB QUEUED NOTIFICATION
+    # -------------------------------------------------------------
+    {
+        "index": 18,
+        "name": "Satellite Job Queued Notification",
+        "category": "Job & Inference",
+        "func": lambda: send_job_notification_email(
+            email=TARGET_RECIPIENT,
+            job={
+                "job_id": "SR_v2_20261017_001",
+                "project": "Ladakh Border Infrastructure",
+                "resolution_gain": "4x (10m → 2.5m/pixel)",
+                "model": "TerraSharp v2.1 (Deep Adversarial Multi-Spectral)",
+                "compute_node": "GPU-Cluster-Alpha (Pending Allocation)",
+                "eta": "Estimated ~18m",
+            },
+            event_type="queued",
+        ),
+    },
 ]
 
 total = len(dispatches)

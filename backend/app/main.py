@@ -35,6 +35,12 @@ def _cors_headers(request: Request) -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        from app.db.session import init_db_tables
+        await asyncio.to_thread(init_db_tables)
+    except Exception as exc:
+        logger.warning("init_db_tables_failed", extra={"error": str(exc)})
+
+    try:
         async with AsyncSessionLocal() as db:
             recovered = await StorageRepository.recover_interrupted_jobs(db)
             if recovered:
@@ -187,6 +193,12 @@ app.include_router(api_router, prefix="/api")
 
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
+
+from app.api.endpoints import notifications
+app.include_router(notifications.router, prefix="", tags=["notifications"])
+
+
 
 @app.get("/healthz")
 def healthz():

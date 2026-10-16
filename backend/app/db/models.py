@@ -69,10 +69,24 @@ class User(Base):
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     email = Column(String, unique=True, index=True, nullable=False)
-    name = Column(String, nullable=False)
-    organization = Column(String, nullable=True)
-    is_active = Column(Boolean, default=False)
+    hashed_password = Column(String, nullable=True)
+    name = Column(String, nullable=True)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    is_verified = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    role = Column(String, default="Analyst")
+    organization = Column(String, default="NTRO — Imagery Analysis")
+    default_jurisdiction = Column(String, default="INDIA")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class OTPRecord(Base):
+    __tablename__ = "otp_records"
     
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String, index=True, nullable=False)
+    otp_code = Column(String, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class OTP(Base):
@@ -82,5 +96,5 @@ class OTP(Base):
     email = Column(String, index=True, nullable=False)
     code = Column(String, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
-    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+

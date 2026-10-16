@@ -31,7 +31,17 @@ def render_otp_email_html(email: str, code: str, purpose: str = "login") -> str:
     clean_code = str(code).strip()
     digits = list(clean_code) if len(clean_code) == 6 else None
 
-    if purpose == "login":
+    if purpose in ("recovery", "reset", "forgot_password"):
+        purpose_tag = "PASSWORD RECOVERY · VERIFICATION PASS"
+        purpose_title = "Reset Your Password"
+        purpose_desc = (
+            "We received a request to reset the password for your <strong>भू DRISTI</strong> workspace account. "
+            "Use the single-use 6-digit verification code below to authorize your password recovery."
+        )
+        badge_bg = "#fef2f2"
+        badge_color = "#991b1b"
+        badge_border = "#fecaca"
+    elif purpose == "login":
         purpose_tag = "VERIFICATION PASS · OPERATOR SIGN-IN"
         purpose_title = "Sign In to भू DRISTI"
         purpose_desc = (
@@ -309,7 +319,12 @@ def render_otp_email_text(email: str, code: str, purpose: str = "login") -> str:
     High-fidelity scientific plain-text fallback for terminal clients and notifications.
     """
     utc_str, ist_str = get_formatted_timestamps()
-    label = "OPERATOR LOGIN VERIFICATION" if purpose == "login" else "ACCOUNT WORKSPACE ACTIVATION"
+    if purpose in ("recovery", "reset", "forgot_password"):
+        label = "PASSWORD RECOVERY AUTHORIZATION"
+    elif purpose == "login":
+        label = "OPERATOR LOGIN VERIFICATION"
+    else:
+        label = "ACCOUNT WORKSPACE ACTIVATION"
     clean_code = str(code).strip()
 
     return (
@@ -343,18 +358,45 @@ def render_otp_email_text(email: str, code: str, purpose: str = "login") -> str:
 
 def _dispatch_smtp_email(msg: EmailMessage, recipient: str) -> None:
     """
-    Core SMTP delivery pipeline with TLS and secure authentication.
+    Core SMTP delivery pipeline with TLS/SSL and automatic port 587 -> 465 fallback.
     """
-    if not settings.SMTP_PASSWORD:
-        logger.warning("SMTP_PASSWORD is not configured. Email delivery simulated.", extra={"recipient": recipient})
+    host = settings.effective_smtp_host
+    port = int(settings.effective_smtp_port)
+    user = settings.effective_smtp_user
+    password = settings.effective_smtp_password
+
+    if not password:
+        logger.warning("SMTP password is not configured. Email delivery simulated.", extra={"recipient": recipient})
         return
 
-    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as server:
-        server.starttls()
-        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-        refused = server.send_message(msg)
-        if refused:
-            raise smtplib.SMTPRecipientsRefused(refused)
+    # Direct SSL (port 465)
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=20) as server:
+            server.login(user, password)
+            refused = server.send_message(msg)
+            if refused:
+                raise smtplib.SMTPRecipientsRefused(refused)
+        return
+
+    # STARTTLS (port 587) with fallback to port 465 SSL
+    try:
+        with smtplib.SMTP(host, port, timeout=15) as server:
+            server.starttls()
+            server.login(user, password)
+            refused = server.send_message(msg)
+            if refused:
+                raise smtplib.SMTPRecipientsRefused(refused)
+    except (ConnectionRefusedError, smtplib.SMTPConnectError, TimeoutError, OSError) as exc:
+        logger.warning(f"SMTP port {port} connection failed ({exc}). Retrying via port 465 SSL...", extra={"recipient": recipient})
+        try:
+            with smtplib.SMTP_SSL(host, 465, timeout=20) as fallback_server:
+                fallback_server.login(user, password)
+                refused = fallback_server.send_message(msg)
+                if refused:
+                    raise smtplib.SMTPRecipientsRefused(refused)
+        except Exception as ssl_exc:
+            logger.error(f"Fallback SSL delivery also failed: {ssl_exc}")
+            raise exc
 
 
 def send_styled_otp_email(email: str, code: str, purpose: str = "login") -> None:
@@ -364,13 +406,16 @@ def send_styled_otp_email(email: str, code: str, purpose: str = "login") -> None
     msg = EmailMessage()
     clean_code = str(code).strip()
 
-    if purpose == "login":
+    if purpose in ("recovery", "reset", "forgot_password"):
+        subject = f"भू DRISTI — Password Reset Code [{clean_code}]"
+    elif purpose == "login":
         subject = f"भू DRISTI — Verification Code [{clean_code}]"
     else:
         subject = f"भू DRISTI — Account Activation Code [{clean_code}]"
 
+    from_email = settings.effective_smtp_from
     msg["Subject"] = subject
-    msg["From"] = f"भू DRISTI <{settings.SMTP_FROM_EMAIL}>"
+    msg["From"] = f"भू DRISTI <{from_email}>"
     msg["To"] = email
 
     # 1. Plain text alternative (fallback)
@@ -383,6 +428,7 @@ def send_styled_otp_email(email: str, code: str, purpose: str = "login") -> None
 
     logger.info("dispatching_styled_otp_email", extra={"email": email, "purpose": purpose})
     _dispatch_smtp_email(msg, email)
+    logger.info("styled_otp_email_dispatched_successfully", extra={"email": email})
     logger.info("styled_otp_email_dispatched_successfully", extra={"email": email})
 
 
@@ -579,7 +625,7 @@ def send_job_notification_email(email: str, job: dict, event_type: str = "create
     else:
         msg["Subject"] = f"भू DRISTI — Job Queued [{job_id}]"
 
-    msg["From"] = f"भू DRISTI <{settings.SMTP_FROM_EMAIL}>"
+    msg["From"] = f"भू DRISTI <{settings.effective_smtp_from}>"
     msg["To"] = email
     msg.set_content(render_job_notification_text(email, job, event_type))
     msg.add_alternative(render_job_notification_html(email, job, event_type), subtype="html")
@@ -647,7 +693,7 @@ def send_report_email(email: str, report_type: str, job_id: str, pdf_bytes: byte
     """
     msg = EmailMessage()
     msg["Subject"] = f"भू DRISTI — {report_type} [{job_id}]"
-    msg["From"] = f"भू DRISTI <{settings.SMTP_FROM_EMAIL}>"
+    msg["From"] = f"भू DRISTI <{settings.effective_smtp_from}>"
     msg["To"] = email
 
     utc_str, ist_str = get_formatted_timestamps()
@@ -727,7 +773,7 @@ def render_test_notification_html(email: str, channel: str = "Email") -> str:
 def send_test_notification_email(email: str, channel: str = "Email") -> None:
     msg = EmailMessage()
     msg["Subject"] = "भू DRISTI — SMTP Notification Test [Channel Verified]"
-    msg["From"] = f"भू DRISTI <{settings.SMTP_FROM_EMAIL}>"
+    msg["From"] = f"भू DRISTI <{settings.effective_smtp_from}>"
     msg["To"] = email
 
     utc_str, ist_str = get_formatted_timestamps()
@@ -862,7 +908,7 @@ def send_platform_alert_email(
 ) -> None:
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = f"भू DRISTI <{settings.SMTP_FROM_EMAIL}>"
+    msg["From"] = f"भू DRISTI <{settings.effective_smtp_from}>"
     msg["To"] = email
 
     utc_str, ist_str = get_formatted_timestamps()
@@ -989,7 +1035,7 @@ def render_digest_email_html(email: str, frequency: str = "Daily Digest") -> str
 def send_digest_email(email: str, frequency: str = "Daily Digest") -> None:
     msg = EmailMessage()
     msg["Subject"] = f"भू DRISTI — {frequency} Executive Telemetry Report"
-    msg["From"] = f"भू DRISTI <{settings.SMTP_FROM_EMAIL}>"
+    msg["From"] = f"भू DRISTI <{settings.effective_smtp_from}>"
     msg["To"] = email
 
     utc_str, ist_str = get_formatted_timestamps()
@@ -1007,6 +1053,516 @@ def send_digest_email(email: str, frequency: str = "Daily Digest") -> None:
     logger.info("dispatching_digest_email", extra={"email": email, "frequency": frequency})
     _dispatch_smtp_email(msg, email)
     logger.info("digest_email_dispatched_successfully", extra={"email": email})
+
+
+# ---------------------------------------------------------------------------
+# CONVENIENCE DISPATCHERS FOR EVERY TYPE OF PLATFORM EMAIL
+# ---------------------------------------------------------------------------
+
+def send_login_otp_email(email: str, code: str) -> None:
+    send_styled_otp_email(email, code, purpose="login")
+
+def send_signup_otp_email(email: str, code: str) -> None:
+    send_styled_otp_email(email, code, purpose="verification")
+
+def send_password_recovery_otp_email(email: str, code: str) -> None:
+    send_styled_otp_email(email, code, purpose="recovery")
+
+def send_job_queued_email(email: str, job_id: str = "SR_v2_20261017_001", project: str = "Ladakh Border Infrastructure") -> None:
+    send_job_notification_email(email, {
+        "job_id": job_id,
+        "project": project,
+        "resolution_gain": "4x (10m → 2.5m/pixel)",
+        "model": "TerraSharp v2.1 (Deep Adversarial Multi-Spectral)",
+        "compute_node": "GPU-Cluster-Alpha (NVIDIA A100-80GB)",
+        "eta": "Estimated ~18m",
+    }, event_type="created")
+
+def send_job_completed_email(email: str, job_id: str = "SR_v2_20261017_001", project: str = "Ladakh Border Infrastructure") -> None:
+    send_job_notification_email(email, {
+        "job_id": job_id,
+        "project": project,
+        "resolution_gain": "4x (10m → 2.5m/pixel)",
+        "model": "TerraSharp v2.1 (Deep Adversarial Multi-Spectral)",
+        "compute_node": "GPU-Cluster-Alpha (NVIDIA A100-80GB)",
+        "eta": "Completed in 14m 28s",
+    }, event_type="completed")
+
+def send_job_failed_email(email: str, job_id: str = "SR_v2_20261017_FAIL", project: str = "Siachen Glacial Moraine", error: str = "Inference Tensor Out-Of-Memory") -> None:
+    send_job_notification_email(email, {
+        "job_id": job_id,
+        "project": project,
+        "resolution_gain": "4x (10m → 2.5m)",
+        "model": "TerraSharp v2.1",
+        "compute_node": "GPU-Cluster-Beta (Node-03)",
+        "eta": f"Terminated: {error}",
+    }, event_type="failed")
+
+def send_job_delayed_email(email: str, job_id: str = "SR_v2_20261017_DELAY", project: str = "Thar Desert Surveillance") -> None:
+    send_platform_alert_email(
+        email=email,
+        subject=f"भू DRISTI — Processing Notice: Queue Delay [{job_id}]",
+        headline="Processing Queue Delay Notice",
+        description=f"Inference job {job_id} for project {project} has experienced a queue backlog due to high satellite ingest volume.",
+        badge_text="SCHEDULE DELAY · INFERENCE QUEUE",
+        theme="warning",
+        dossier_items=[
+            ("Job Identifier", job_id),
+            ("Mission Project", project),
+            ("Expected Delay", "+12 minutes"),
+            ("Status", "Rescheduling to Secondary GPU Worker"),
+        ]
+    )
+
+def send_storage_threshold_alert_email(email: str, usage_pct: float = 90.0, current_tb: float = 9.02, max_tb: float = 10.0) -> None:
+    send_platform_alert_email(
+        email=email,
+        subject="भू DRISTI — Critical Storage Threshold Alert (90% Consumed)",
+        headline="Storage Capacity Warning (90%)",
+        description=f"Your high-resolution satellite imagery storage volume has reached {usage_pct}% of total provisioned capacity.",
+        badge_text="INFRASTRUCTURE ALERT · STORAGE CONSUMPTION",
+        theme="danger",
+        dossier_items=[
+            ("Provisioned Volume", f"{max_tb:.1f} TB (Ceph / S3 Object Storage)"),
+            ("Consumed Volume", f"{current_tb:.2f} TB ({usage_pct:.1f}%)"),
+            ("Recommended Action", "Archive older raw scenes or expand storage tier"),
+        ]
+    )
+
+def send_gpu_cluster_alert_email(email: str, node: str = "GPU-Cluster-Alpha", status: str = "Healthy (All 4 Nodes Online)", gpus: str = "4x NVIDIA A100-80GB") -> None:
+    send_platform_alert_email(
+        email=email,
+        subject=f"भू DRISTI — GPU Cluster Status Update [{node}]",
+        headline=f"GPU Worker Node Status: {status}",
+        description=f"Telemetry metrics for cluster node {node} updated. Neural tensor inference scheduler active.",
+        badge_text="CLUSTER TELEMETRY · HARDWARE STATUS",
+        theme="teal",
+        dossier_items=[
+            ("Compute Node", node),
+            ("Hardware Acceleration", gpus),
+            ("Operational State", status),
+        ]
+    )
+
+def send_team_invite_email(email: str, inviter_name: str = "Lead Administrator", org_name: str = "NTRO", role: str = "Analyst") -> None:
+    send_platform_alert_email(
+        email=email,
+        subject=f"भू DRISTI — Invitation to Join {org_name} Workspace",
+        headline="You've Been Invited to Join भू DRISTI",
+        description=f"{inviter_name} has invited you to collaborate on the {org_name} geospatial intelligence workspace as a {role}.",
+        badge_text="WORKSPACE INVITATION · OPERATOR ONBOARDING",
+        theme="info",
+        dossier_items=[
+            ("Invited Email", email),
+            ("Organization", org_name),
+            ("Assigned Role", role),
+            ("Invited By", inviter_name),
+        ]
+    )
+
+def send_role_change_email(email: str, user_name: str = "Operator", new_role: str = "Senior Imagery Analyst", admin_name: str = "Security Officer") -> None:
+    send_platform_alert_email(
+        email=email,
+        subject=f"भू DRISTI — Security Role Updated to {new_role}",
+        headline="Access Permissions Updated",
+        description=f"Your account role and workspace permissions on भू DRISTI have been elevated to {new_role} by {admin_name}.",
+        badge_text="SECURITY PERMISSIONS · ROLE MODIFICATION",
+        theme="purple",
+        dossier_items=[
+            ("Account Name", user_name),
+            ("Account Email", email),
+            ("New Role", new_role),
+            ("Authorized By", admin_name),
+        ]
+    )
+
+def send_security_login_alert_email(email: str, ip: str = "103.21.244.18", location: str = "New Delhi, India", device: str = "Chrome 122 on Windows 11") -> None:
+    send_platform_alert_email(
+        email=email,
+        subject="भू DRISTI — Security Notice: Sign-In from New Device",
+        headline="New Device Sign-In Detected",
+        description="A successful sign-in to your भू DRISTI account was registered from a new browser or IP address. If this was you, no action is needed.",
+        badge_text="ZERO-TRUST AUDIT · NEW SESSION DETECTED",
+        theme="orange",
+        dossier_items=[
+            ("Account Email", email),
+            ("IP Address", ip),
+            ("Approximate Location", location),
+            ("User Agent / Device", device),
+        ]
+    )
+
+def send_project_comment_email(email: str, author: str = "Dr. Rajesh V.", project: str = "Ladakh Border Infrastructure", comment: str = "Super-resolution analysis shows clear delineation along road segment B4.") -> None:
+    send_platform_alert_email(
+        email=email,
+        subject=f"भू DRISTI — New Mission Discussion on {project}",
+        headline=f"New Note Added to Project {project}",
+        description=f'{author} posted an operational note: "{comment}"',
+        badge_text="COLLABORATION · MISSION BRIEFING",
+        theme="info",
+        dossier_items=[
+            ("Author", author),
+            ("Project", project),
+            ("Note Excerpt", comment),
+        ]
+    )
+
+def send_attached_validation_report_email(email: str, job_id: str = "SR_v2_20261017_001") -> None:
+    from app.services.report_service import validation_report_pdf
+    from app.services import data_service
+    pdf_bytes = validation_report_pdf(data_service.build_validation(job_id))
+    send_report_email(email, "Validation Quality Report", job_id, pdf_bytes, f"validation-report-{job_id}.pdf")
+
+def send_attached_comparison_report_email(email: str, job_id: str = "SR_v2_20261017_001") -> None:
+    from app.services.report_service import comparison_snapshot_pdf
+    from app.services import data_service
+    pdf_bytes = comparison_snapshot_pdf(data_service.build_comparison(job_id))
+    send_report_email(email, "Comparison Analysis Snapshot", job_id, pdf_bytes, f"comparison-snapshot-{job_id}.pdf")
+
+def send_attached_invoice_email(email: str, inv_id: str = "INV-2026-0842", amount: float = 320.0, date: str = "17 Oct 2026") -> None:
+    from app.services.report_service import invoice_pdf
+    pdf_bytes = invoice_pdf(inv_id, amount, date)
+    send_report_email(email, "Commercial Billing Invoice", inv_id, pdf_bytes, f"invoice-{inv_id}.pdf")
+
+def dispatch_email_by_type(email: str, email_type: str, extra: dict = None) -> dict:
+    """
+    Universal router to dispatch ANY of the 17 platform email types via SMTP or Supabase.
+    """
+    e = (extra or {})
+    clean_type = email_type.strip().lower()
+
+    if clean_type in ("otp_login", "login_otp", "login"):
+        code = e.get("code") or "849201"
+        send_login_otp_email(email, code)
+        return {"type": "otp_login", "recipient": email, "code": code}
+
+    elif clean_type in ("otp_signup", "signup_otp", "activation", "register"):
+        code = e.get("code") or "619384"
+        send_signup_otp_email(email, code)
+        return {"type": "otp_signup", "recipient": email, "code": code}
+
+    elif clean_type in ("password_reset", "recovery", "reset_password"):
+        code = e.get("code") or "472910"
+        send_password_recovery_otp_email(email, code)
+        return {"type": "password_reset", "recipient": email, "code": code}
+
+    elif clean_type in ("job_queued", "job_created", "queued"):
+        job_id = e.get("job_id", "SR_v2_20261017_001")
+        project = e.get("project", "Ladakh Border Infrastructure")
+        send_job_queued_email(email, job_id, project)
+        return {"type": "job_queued", "recipient": email, "job_id": job_id}
+
+    elif clean_type in ("job_completed", "completed", "done"):
+        job_id = e.get("job_id", "SR_v2_20261017_001")
+        project = e.get("project", "Ladakh Border Infrastructure")
+        send_job_completed_email(email, job_id, project)
+        return {"type": "job_completed", "recipient": email, "job_id": job_id}
+
+    elif clean_type in ("job_failed", "failed", "error"):
+        job_id = e.get("job_id", "SR_v2_20261017_FAIL")
+        project = e.get("project", "Siachen Glacial Moraine")
+        error = e.get("error", "Inference Tensor Out-Of-Memory")
+        send_job_failed_email(email, job_id, project, error)
+        return {"type": "job_failed", "recipient": email, "job_id": job_id}
+
+    elif clean_type in ("job_delayed", "delayed"):
+        job_id = e.get("job_id", "SR_v2_20261017_DELAY")
+        project = e.get("project", "Thar Desert Surveillance")
+        send_job_delayed_email(email, job_id, project)
+        return {"type": "job_delayed", "recipient": email, "job_id": job_id}
+
+    elif clean_type in ("storage_threshold", "storage_warning", "storage"):
+        pct = float(e.get("usage_pct", 90.0))
+        curr = float(e.get("current_tb", 9.02))
+        max_tb = float(e.get("max_tb", 10.0))
+        send_storage_threshold_alert_email(email, pct, curr, max_tb)
+        return {"type": "storage_threshold", "recipient": email, "usage_pct": pct}
+
+    elif clean_type in ("gpu_status", "gpu_cluster", "gpu"):
+        node = e.get("node", "GPU-Cluster-Alpha")
+        status = e.get("status", "Healthy (All 4 Nodes Online)")
+        gpus = e.get("gpus", "4x NVIDIA A100-80GB")
+        send_gpu_cluster_alert_email(email, node, status, gpus)
+        return {"type": "gpu_status", "recipient": email, "node": node}
+
+    elif clean_type in ("team_invite", "invite"):
+        inviter = e.get("inviter_name", "Lead Administrator")
+        org = e.get("org_name", "NTRO")
+        role = e.get("role", "Analyst")
+        send_team_invite_email(email, inviter, org, role)
+        return {"type": "team_invite", "recipient": email, "role": role}
+
+    elif clean_type in ("role_change", "role"):
+        user = e.get("user_name", "Operator")
+        new_role = e.get("new_role", "Senior Imagery Analyst")
+        admin = e.get("admin_name", "Security Officer")
+        send_role_change_email(email, user, new_role, admin)
+        return {"type": "role_change", "recipient": email, "new_role": new_role}
+
+    elif clean_type in ("security_login", "security_alert", "security"):
+        ip = e.get("ip", "103.21.244.18")
+        loc = e.get("location", "New Delhi, India")
+        dev = e.get("device", "Chrome 122 on Windows 11")
+        send_security_login_alert_email(email, ip, loc, dev)
+        return {"type": "security_login", "recipient": email, "ip": ip}
+
+    elif clean_type in ("project_comment", "comment"):
+        author = e.get("author", "Dr. Rajesh V.")
+        project = e.get("project", "Ladakh Border Infrastructure")
+        comment = e.get("comment", "Super-resolution analysis shows clear delineation along road segment B4.")
+        send_project_comment_email(email, author, project, comment)
+        return {"type": "project_comment", "recipient": email, "author": author}
+
+    elif clean_type in ("report_validation", "validation_pdf", "validation"):
+        job_id = e.get("job_id", "SR_v2_20261017_001")
+        send_attached_validation_report_email(email, job_id)
+        return {"type": "report_validation", "recipient": email, "job_id": job_id}
+
+    elif clean_type in ("report_comparison", "comparison_pdf", "comparison"):
+        job_id = e.get("job_id", "SR_v2_20261017_001")
+        send_attached_comparison_report_email(email, job_id)
+        return {"type": "report_comparison", "recipient": email, "job_id": job_id}
+
+    elif clean_type in ("invoice", "invoice_pdf"):
+        inv_id = e.get("inv_id", "INV-2026-0842")
+        amt = float(e.get("amount", 320.0))
+        date = e.get("date", "17 Oct 2026")
+        send_attached_invoice_email(email, inv_id, amt, date)
+        return {"type": "invoice", "recipient": email, "inv_id": inv_id}
+
+    elif clean_type in ("daily_digest", "digest", "summary"):
+        freq = e.get("frequency", "Daily Digest")
+        send_digest_email(email, freq)
+        return {"type": "daily_digest", "recipient": email, "frequency": freq}
+
+    elif clean_type in ("smtp_test", "test"):
+        ch = e.get("channel", "Email (SMTP Relay)")
+        send_test_notification_email(email, ch)
+        return {"type": "smtp_test", "recipient": email}
+
+    else:
+        raise ValueError(f"Unknown email type: '{email_type}'. Supported: otp_login, otp_signup, password_reset, job_queued, job_completed, job_failed, job_delayed, storage_threshold, gpu_status, team_invite, role_change, security_login, project_comment, report_validation, report_comparison, invoice, daily_digest, smtp_test")
+
+
+def get_email_catalog() -> list[dict]:
+    """
+    Returns full metadata catalog for all 18 Bhu-Dristi email types.
+    """
+    return [
+        {
+            "id": "otp_login",
+            "name": "Operator Sign-in Verification Code (OTP)",
+            "category": "Authentication",
+            "description": "Dispatches 6-digit styled OTP verification pass to authorized operators attempting terminal sign-in.",
+            "supports_supabase_smtp": True,
+            "supports_direct_smtp": True,
+            "sample_extra": {"code": "849201"},
+        },
+        {
+            "id": "otp_signup",
+            "name": "Account Activation / New User Welcome (OTP)",
+            "category": "Authentication",
+            "description": "Sends account confirmation code and onboarding instructions for newly registered users.",
+            "supports_supabase_smtp": True,
+            "supports_direct_smtp": True,
+            "sample_extra": {"code": "619384"},
+        },
+        {
+            "id": "password_reset",
+            "name": "Password Recovery Authorization Code",
+            "category": "Authentication",
+            "description": "Sends secure single-use recovery code to reset forgotten account passwords.",
+            "supports_supabase_smtp": True,
+            "supports_direct_smtp": True,
+            "sample_extra": {"code": "472910"},
+        },
+        {
+            "id": "job_queued",
+            "name": "Satellite Job Queued Notification",
+            "category": "Job & Inference",
+            "description": "Alerts operator when a new multi-spectral satellite super-resolution job is ingested and queued.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"job_id": "SR_v2_20261017_001", "project": "Ladakh Border Infrastructure"},
+        },
+        {
+            "id": "job_completed",
+            "name": "Job Completed Alert (Multi-spectral 4x Gain)",
+            "category": "Job & Inference",
+            "description": "Delivers completion dossier with model inference telemetry, duration, and resolution gain metrics.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"job_id": "SR_v2_20261017_001", "project": "Ladakh Border Infrastructure"},
+        },
+        {
+            "id": "job_failed",
+            "name": "Job Failed / Inference Exception Alert",
+            "category": "Job & Inference",
+            "description": "Critical notice when an inference pipeline terminates abnormally due to VRAM or tensor faults.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"job_id": "SR_v2_20261017_FAIL", "project": "Siachen Glacial Moraine", "error": "Inference Tensor Out-Of-Memory"},
+        },
+        {
+            "id": "job_delayed",
+            "name": "Processing Queue Delay Notice",
+            "category": "Job & Inference",
+            "description": "Advisory sent when high-priority satellite telemetry surges cause queue delays.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"job_id": "SR_v2_20261017_DELAY", "project": "Thar Desert Surveillance"},
+        },
+        {
+            "id": "storage_threshold",
+            "name": "Storage Threshold Capacity Alert (90%)",
+            "category": "Infrastructure & Telemetry",
+            "description": "Infrastructure warning when high-resolution satellite imagery storage volume reaches 90% capacity.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"usage_pct": 91.8, "current_tb": 9.18, "max_tb": 10.0},
+        },
+        {
+            "id": "gpu_status",
+            "name": "GPU Worker Cluster Topology & Status Update",
+            "category": "Infrastructure & Telemetry",
+            "description": "Telemetry status of NVIDIA A100 GPU compute nodes, VRAM allocation, and thermal metrics.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"node": "GPU-Cluster-Alpha", "status": "Healthy (All 4 Nodes Online)", "gpus": "4x NVIDIA A100-80GB"},
+        },
+        {
+            "id": "team_invite",
+            "name": "Team & Workspace Collaboration Invite",
+            "category": "Team & Workspace",
+            "description": "Invitation dispatch for newly invited analysts or commanders to collaborate on geospatial projects.",
+            "supports_supabase_smtp": True,
+            "supports_direct_smtp": True,
+            "sample_extra": {"inviter_name": "Arjun Pratap", "org_name": "NTRO", "role": "Senior Imagery Analyst"},
+        },
+        {
+            "id": "role_change",
+            "name": "Operator Role & Clearance Permissions Updated",
+            "category": "Security & IAM",
+            "description": "Audit notification when an operator's security level or workspace permissions are elevated or changed.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"user_name": "Operator", "new_role": "Senior Mission Commander", "admin_name": "Security Director"},
+        },
+        {
+            "id": "security_login",
+            "name": "Zero-Trust Audit: Sign-In from New Device / IP",
+            "category": "Security & IAM",
+            "description": "Security notification alerting operators of successful terminal access from an unrecognized IP or browser.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"ip": "49.37.142.88", "location": "New Delhi, India", "device": "Chrome 124 on Windows 11"},
+        },
+        {
+            "id": "project_comment",
+            "name": "New Mission Discussion / AOI Annotation Comment",
+            "category": "Team & Workspace",
+            "description": "Real-time notice when an intelligence note or coordinate annotation is posted to an AOI project.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"author": "Flight Lt. Vikram Verma", "project": "Ladakh Border Infrastructure", "comment": "Super-resolution reveals newly surfaced logistics access trail."},
+        },
+        {
+            "id": "report_validation",
+            "name": "Quality Validation Report (with attached PDF)",
+            "category": "Intelligence Reports",
+            "description": "Dispatches comprehensive PSNR, SSIM, SAM, and ERGAS validation report with cryptographic PDF attachment.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"job_id": "SR_v2_20261017_001"},
+        },
+        {
+            "id": "report_comparison",
+            "name": "Comparison Analysis Snapshot (with attached PDF)",
+            "category": "Intelligence Reports",
+            "description": "Delivers before/after super-resolution radiometric comparison snapshot with attached PDF dossier.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"job_id": "SR_v2_20261017_001"},
+        },
+        {
+            "id": "invoice",
+            "name": "Commercial Compute Billing Statement (with attached PDF)",
+            "category": "Intelligence Reports",
+            "description": "Itemized compute consumption invoice for GPU cluster compute hours and storage volume.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"inv_id": "INV-2026-0842", "amount": 320.0, "date": "17 Oct 2026"},
+        },
+        {
+            "id": "daily_digest",
+            "name": "Executive Daily / Weekly Telemetry Digest",
+            "category": "Digest & Telemetry",
+            "description": "Consolidated summary of completed inference passes, satellite ingestion volume, and health metrics.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"frequency": "Daily Digest"},
+        },
+        {
+            "id": "smtp_test",
+            "name": "Live SMTP Diagnostic Channel Verification",
+            "category": "Diagnostics",
+            "description": "Immediate channel handshake test verifying outbound SMTP relay connectivity and credentials.",
+            "supports_supabase_smtp": False,
+            "supports_direct_smtp": True,
+            "sample_extra": {"channel": "Email (SMTP Relay)"},
+        },
+    ]
+
+
+async def async_dispatch_email_by_type(email: str, email_type: str, extra: dict = None, provider: str = "auto") -> dict:
+    """
+    Asynchronous universal router supporting Supabase Auth HTTPS dispatch and direct SMTP relay.
+    """
+    clean_type = (email_type or "").strip().lower()
+    e = extra or {}
+    logger.info("async_dispatch_email_start", extra={"email": email, "type": clean_type, "provider": provider})
+
+    # 1. Supabase Auth API Dispatch (When configured and requested/auto)
+    if provider in ("supabase", "auto") and clean_type in ("otp_login", "login_otp", "otp_signup", "signup_otp", "activation", "register", "password_reset", "recovery", "reset_password"):
+        if settings.SUPABASE_URL and settings.SUPABASE_ANON_KEY and "PROJECT_REF" not in settings.SUPABASE_URL:
+            import httpx
+            try:
+                headers = {
+                    "apikey": settings.SUPABASE_ANON_KEY,
+                    "Authorization": f"Bearer {settings.SUPABASE_ANON_KEY}",
+                    "Content-Type": "application/json",
+                }
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    if clean_type in ("password_reset", "recovery", "reset_password"):
+                        url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/recover"
+                        resp = await client.post(url, headers=headers, json={"email": email})
+                    else:
+                        url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/otp"
+                        resp = await client.post(url, headers=headers, json={"email": email, "create_user": True})
+
+                    if resp.status_code in (200, 201):
+                        logger.info("supabase_smtp_email_dispatched", extra={"email": email, "type": clean_type})
+                        return {
+                            "provider": "supabase_smtp",
+                            "status": "dispatched",
+                            "type": clean_type,
+                            "recipient": email,
+                            "message": f"Successfully triggered Supabase SMTP dispatch for {clean_type}",
+                        }
+                    else:
+                        logger.warning(f"supabase_api_non_200: {resp.status_code} ({resp.text}). Falling back to direct SMTP.")
+            except Exception as exc:
+                logger.warning(f"supabase_smtp_exception: {exc}. Falling back to direct SMTP.")
+
+    # 2. Direct SMTP Relay dispatch (dispatched in threadpool to keep FastAPI async event loop unblocked)
+    import asyncio
+    res = await asyncio.to_thread(dispatch_email_by_type, email, clean_type, e)
+    res["provider"] = "direct_smtp"
+    res["status"] = "dispatched"
+    res["smtp_host"] = settings.effective_smtp_host
+    return res
+
+
 
 
 

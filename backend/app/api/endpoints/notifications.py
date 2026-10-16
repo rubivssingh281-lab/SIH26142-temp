@@ -9,10 +9,23 @@ from app.core.config import settings
 from app.services.email_service import (
     send_test_notification_email,
     get_formatted_timestamps,
+    get_email_catalog,
+    async_dispatch_email_by_type,
+    dispatch_email_by_type,
 )
+from app.services.supabase_email_templates import get_all_supabase_templates
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+class UniversalEmailRequest(BaseModel):
+    email: EmailStr
+    type: str
+    extra: Optional[dict] = None
+    provider: Optional[str] = "auto" # "auto" | "supabase" | "smtp"
+
+class BatchEmailRequest(BaseModel):
+    email: Optional[EmailStr] = None
 
 class NotificationItemModel(BaseModel):
     id: str
@@ -197,3 +210,75 @@ async def get_notification_settings():
 async def update_notification_settings(body: dict):
     _preferences.update(body)
     return {"status": "ok", "preferences": _preferences}
+
+
+@router.get("/notifications/email/catalog")
+async def list_email_catalog():
+    """
+    Returns the comprehensive catalog of all 18 Bhu-Dristi email types with metadata,
+    sample payloads, and Supabase / SMTP delivery capabilities.
+    """
+    return {
+        "total": 18,
+        "smtp_server": settings.effective_smtp_host,
+        "smtp_port": settings.effective_smtp_port,
+        "smtp_user": settings.effective_smtp_user,
+        "supabase_configured": bool(settings.SUPABASE_URL and "PROJECT_REF" not in settings.SUPABASE_URL),
+        "types": get_email_catalog(),
+    }
+
+
+@router.get("/notifications/email/supabase-templates")
+async def list_supabase_templates():
+    """
+    Returns copy-paste ready HTML email templates for Supabase Dashboard (Auth -> Email Templates).
+    """
+    return get_all_supabase_templates()
+
+
+@router.post("/notifications/email/send-type")
+async def send_email_by_type(payload: UniversalEmailRequest):
+    """
+    Universal email dispatch endpoint. Routes any of the 18 platform email types
+    either via Supabase Auth (when applicable & configured) or direct SMTP relay.
+    """
+    try:
+        res = await async_dispatch_email_by_type(
+            email=str(payload.email),
+            email_type=payload.type,
+            extra=payload.extra,
+            provider=payload.provider or "auto",
+        )
+        return res
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as exc:
+        logger.exception("send_email_by_type_failed", extra={"email": payload.email, "type": payload.type, "error": str(exc)})
+        raise HTTPException(status_code=502, detail=f"Email dispatch failed: {str(exc)}")
+
+
+@router.post("/notifications/email/send-all-samples")
+async def send_all_sample_emails_endpoint(payload: BatchEmailRequest, background_tasks: BackgroundTasks):
+    """
+    Dispatches all 18 sample emails to the target email address.
+    """
+    target = str(payload.email or settings.effective_smtp_from or "bhudhristi@gmail.com")
+    catalog = get_email_catalog()
+
+    async def _runner():
+        for item in catalog:
+            t = item["id"]
+            try:
+                await async_dispatch_email_by_type(target, t, item.get("sample_extra"))
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                logger.warning(f"Batch sample dispatch failed for {t}: {e}")
+
+    background_tasks.add_task(_runner)
+    return {
+        "status": "queued",
+        "recipient": target,
+        "total_dispatches": len(catalog),
+        "message": f"Queued {len(catalog)} sample emails for delivery to {target}.",
+    }
+

@@ -34,13 +34,34 @@ async function get<T>(path: string, init?: RequestInit): Promise<T> {
   const p = path.startsWith("/") ? path : `/${path}`;
   const targetUrl = url(p);
 
+  const token = typeof window !== "undefined"
+    ? (localStorage.getItem("bhudristi_token") || localStorage.getItem("ip-sakti-token"))
+    : null;
+
+  const reqHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((init?.headers as Record<string, string>) || {}),
+  };
+  if (token && !reqHeaders["Authorization"]) {
+    reqHeaders["Authorization"] = `Bearer ${token}`;
+  }
+
   try {
     const res = await fetch(targetUrl, {
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
       ...init,
+      headers: reqHeaders,
     });
     if (!res.ok) {
+      if (res.status === 401 && typeof window !== "undefined") {
+        localStorage.removeItem("bhudristi_token");
+        localStorage.removeItem("bhudristi_user");
+        localStorage.removeItem("ip-sakti-token");
+        localStorage.removeItem("ip-sakti-user");
+        document.cookie = "bhudristi_session=; path=/; max-age=0; SameSite=Lax";
+        document.cookie = "ip_sakti_session=; path=/; max-age=0; SameSite=Lax";
+        window.dispatchEvent(new Event("bhudristi-auth-expired"));
+      }
       if (BASE) {
         console.warn(`[भू DRISTI] Remote API ${targetUrl} returned HTTP ${res.status}. Falling back to built-in local API: /api${p}`);
         try {
@@ -173,6 +194,24 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(preferences),
       }),
+    getEmailCatalog: () =>
+      get<{ total: number; smtp_server: string; types: any[] }>("/notifications/email/catalog"),
+    sendEmailType: (email: string, type: string, extra?: any, provider: "auto" | "supabase" | "smtp" = "auto") =>
+      get<{ status: string; type: string; recipient: string; provider: string }>(
+        "/notifications/email/send-type",
+        {
+          method: "POST",
+          body: JSON.stringify({ email, type, extra, provider }),
+        }
+      ),
+    sendAllSampleEmails: (email?: string) =>
+      get<{ status: string; recipient: string; total_dispatches: number }>(
+        "/notifications/email/send-all-samples",
+        {
+          method: "POST",
+          body: JSON.stringify({ email }),
+        }
+      ),
   },
 };
 
