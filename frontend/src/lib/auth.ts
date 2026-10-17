@@ -97,22 +97,47 @@ async function authFetch<T>(endpoint: string, options: RequestInit = {}): Promis
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = `${API_BASE}${path}`;
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers,
+    });
 
-  if (!res.ok) {
-    if (res.status === 401) {
-      clearBrowserSession();
+    if (!res.ok) {
+      if (res.status === 401) {
+        clearBrowserSession();
+      }
+      if (API_BASE && typeof window !== "undefined") {
+        try {
+          const localRes = await fetch(path, { ...options, headers });
+          if (localRes.ok) {
+            return (await localRes.json()) as T;
+          }
+        } catch {
+          // fallback failed, continue to throw below
+        }
+      }
+      const errBody = await res.json().catch(() => ({}));
+      const message = errBody.detail || errBody.message || `Request failed with status ${res.status}`;
+      throw new Error(typeof message === "string" ? message : JSON.stringify(message));
     }
-    const errBody = await res.json().catch(() => ({}));
-    const message = errBody.detail || errBody.message || `Request failed with status ${res.status}`;
-    throw new Error(typeof message === "string" ? message : JSON.stringify(message));
-  }
 
-  return (await res.json()) as T;
+    return (await res.json()) as T;
+  } catch (err) {
+    if (API_BASE && typeof window !== "undefined") {
+      try {
+        const localRes = await fetch(path, { ...options, headers });
+        if (localRes.ok) {
+          return (await localRes.json()) as T;
+        }
+      } catch {
+        // fallback failed, continue to throw original error below
+      }
+    }
+    throw err;
+  }
 }
+
 
 export const authApi = {
   async register(data: { name?: string; email: string; password: string; organization?: string }) {
