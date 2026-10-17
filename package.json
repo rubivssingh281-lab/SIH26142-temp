@@ -1,11 +1,14 @@
 {
   "name": "bhu-dristi",
   "version": "1.0.0",
+  "private": true,
   "description": "Deep Learning Based Super Resolution Mapping (SRM) from Medium Resolution Satellite Imageries",
   "scripts": {
     "dev": "bash run.sh",
     "build": "npm --prefix frontend run build",
     "start": "npm --prefix frontend run start",
+    "install": "npm --prefix frontend install",
+    "postinstall": "npm --prefix frontend install",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && uvicorn app.main:app --reload --port 8000"
   }
