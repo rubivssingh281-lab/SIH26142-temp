@@ -24,7 +24,17 @@ export interface AuthSessionResponse {
   user: AuthUser;
 }
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+function getEffectiveApiBase(): string {
+  const envBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/$/, "");
+  if (envBase.includes("bhudristi-backend.onrender.com") || (!envBase && typeof window !== "undefined" && window.location.hostname.includes("vercel.app"))) {
+    return "https://sih26142-temp.onrender.com";
+  }
+  if (!envBase && typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+    return "http://127.0.0.1:8000";
+  }
+  return envBase || (typeof window !== "undefined" && window.location.hostname.includes("vercel.app") ? "https://sih26142-temp.onrender.com" : "http://127.0.0.1:8000");
+}
+
 
 /**
  * Stores authentication token and session both in localStorage and in HTTP-accessible cookies
@@ -94,8 +104,9 @@ async function authFetch<T>(endpoint: string, options: RequestInit = {}): Promis
   }
 
   // Construct target URL
+  const apiBase = getEffectiveApiBase();
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  const url = `${API_BASE}${path}`;
+  const url = `${apiBase}${path}`;
 
   try {
     const res = await fetch(url, {
@@ -107,7 +118,7 @@ async function authFetch<T>(endpoint: string, options: RequestInit = {}): Promis
       if (res.status === 401) {
         clearBrowserSession();
       }
-      if (API_BASE && typeof window !== "undefined") {
+      if (apiBase && typeof window !== "undefined") {
         try {
           const localRes = await fetch(path, { ...options, headers });
           if (localRes.ok) {
@@ -124,7 +135,7 @@ async function authFetch<T>(endpoint: string, options: RequestInit = {}): Promis
 
     return (await res.json()) as T;
   } catch (err) {
-    if (API_BASE && typeof window !== "undefined") {
+    if (apiBase && typeof window !== "undefined") {
       try {
         const localRes = await fetch(path, { ...options, headers });
         if (localRes.ok) {
@@ -137,6 +148,7 @@ async function authFetch<T>(endpoint: string, options: RequestInit = {}): Promis
     throw err;
   }
 }
+
 
 
 export const authApi = {

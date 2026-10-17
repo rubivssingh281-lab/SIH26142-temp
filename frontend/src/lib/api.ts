@@ -22,13 +22,18 @@ import type {
   ValidationResponse,
 } from "./types";
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+const BASE = (rawBase.includes("bhudristi-backend.onrender.com") || (!rawBase && typeof window !== "undefined" && window.location.hostname.includes("vercel.app")))
+  ? "https://sih26142-temp.onrender.com"
+  : (rawBase || (typeof window !== "undefined" && window.location.hostname.includes("vercel.app") ? "https://sih26142-temp.onrender.com" : ""));
 
 /** Build a URL: absolute FastAPI path when BASE is set, else local /api route. */
 function url(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
-  return BASE ? `${BASE}/api${p}` : `/api${p}`;
+  const effectiveBase = BASE || (typeof window !== "undefined" && window.location.hostname.includes("vercel.app") ? "https://sih26142-temp.onrender.com" : "");
+  return effectiveBase ? `${effectiveBase}/api${p}` : `/api${p}`;
 }
+
 
 async function get<T>(path: string, init?: RequestInit): Promise<T> {
   const p = path.startsWith("/") ? path : `/${path}`;
