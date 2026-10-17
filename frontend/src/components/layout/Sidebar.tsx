@@ -61,7 +61,7 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   );
 
   const renderUserFooter = (closeOnSelect = false) => (
-    <div className="border-t border-line p-3">
+    <div className="border-t border-line p-3 shrink-0">
       <Link
         href="/settings"
         onClick={closeOnSelect ? onClose : undefined}
@@ -80,8 +80,8 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   return (
     <>
       {/* 1. Desktop Persistent Sidebar (>= 1024px) */}
-      <aside className="hidden lg:flex shrink-0 h-screen sticky top-0 w-[248px] bg-surface border-r border-line flex-col z-20">
-        <div className="h-[76px] flex items-center border-b border-line px-5">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[248px] h-screen bg-surface border-r border-line flex-col z-30">
+        <div className="h-16 sm:h-[76px] flex items-center border-b border-line px-5 shrink-0">
           <Logo showText />
         </div>
         {renderNavLinks(false)}
