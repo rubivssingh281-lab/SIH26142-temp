@@ -73,7 +73,7 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="p-2.5 sm:p-6 space-y-3 sm:space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-2.5 sm:p-3 space-y-2.5 sm:space-y-3 min-w-0 w-full">
       {/* Header: Title + Create Button on top, compact filters below */}
       <div className="flex items-center justify-between gap-2 sm:hidden">
         <h1 className="text-[18px] font-semibold text-ink">All Projects</h1>

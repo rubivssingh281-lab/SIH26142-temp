@@ -126,7 +126,7 @@ export default function NewJobPage() {
   };
 
   return (
-    <div className="p-2.5 sm:p-6 space-y-3 sm:space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-2.5 sm:p-3 space-y-2.5 sm:space-y-3 min-w-0 w-full">
       {/* Stepper */}
       <Card className="p-2.5 sm:p-4">
         {/* Mobile Stepper (< sm) */}

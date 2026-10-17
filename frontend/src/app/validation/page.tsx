@@ -75,7 +75,7 @@ function ValidationInner() {
   if (!data) return null;
 
   return (
-    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-2.5 sm:p-3 space-y-2.5 sm:space-y-3 min-w-0 w-full">
       {/* Header controls */}
       <Card className="p-3.5 sm:p-4">
         <div className="flex flex-wrap items-end gap-3 sm:gap-5">

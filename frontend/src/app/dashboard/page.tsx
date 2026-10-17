@@ -37,7 +37,7 @@ export default function DashboardPage() {
   const { stats, system_status: sys, recent_job: rj, recent_jobs, last_updated } = data;
 
   return (
-    <div className="p-2.5 sm:p-6 space-y-3 sm:space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-2.5 sm:p-3 space-y-2.5 sm:space-y-3 min-w-0 w-full">
       <div className="flex items-center justify-between text-[11px] sm:text-[13px] text-muted">
         <span className="font-medium text-ink-soft">Dashboard Overview</span>
         <div className="flex items-center gap-1.5">

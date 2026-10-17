@@ -57,7 +57,7 @@ export default function QueuePage() {
   const { stats, cluster } = data;
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-2.5 sm:p-3 space-y-2.5 sm:space-y-3 min-w-0 w-full">
       {/* 1. Header with Title & Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
         <div>

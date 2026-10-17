@@ -105,7 +105,7 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 pr-6 sm:pr-8 space-y-6 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-2.5 sm:p-3 space-y-2.5 sm:space-y-3 min-w-0 w-full">
       {/* Top Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4">
         <div>

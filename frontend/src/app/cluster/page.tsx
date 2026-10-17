@@ -153,7 +153,7 @@ export default function ClusterPage() {
   };
 
   return (
-    <div className="p-2.5 sm:p-6 space-y-3.5 sm:space-y-6 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-2.5 sm:p-3 space-y-2.5 sm:space-y-3 min-w-0 w-full">
       {/* Top breadcrumb & action bar */}
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-3 sm:pb-4">
         <div>

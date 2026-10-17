@@ -69,10 +69,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={handleToggleSidebar}
         />
-        <main className="flex-1 min-w-0 w-full overflow-x-clip pb-16 lg:pb-0">
+        <main className="flex-1 min-w-0 w-full overflow-x-clip pb-20 sm:pb-24 lg:pb-12">
           {children}
         </main>
-        <Footer />
+        <Footer collapsed={sidebarCollapsed} />
       </div>
 
       {/* Mobile bottom navigation bar */}

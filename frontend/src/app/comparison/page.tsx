@@ -93,7 +93,7 @@ function ComparisonInner() {
   if (!data) return null;
 
   return (
-    <div className="p-2.5 sm:p-6 space-y-3 sm:space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-2.5 sm:p-3 space-y-2.5 sm:space-y-3 min-w-0 w-full">
       {/* Control bar */}
       <Card className="p-2.5 sm:p-4">
         <div className="flex flex-wrap items-end gap-2.5 sm:gap-5">

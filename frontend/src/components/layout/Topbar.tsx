@@ -269,7 +269,7 @@ export function Topbar({ onOpenMobileMenu, sidebarCollapsed = false, onToggleSid
   return (
     <header
       ref={topbarRef}
-      className="h-16 sm:h-[76px] shrink-0 sticky top-0 z-30 bg-surface/95 backdrop-blur border-b border-line flex items-center px-3.5 sm:px-6 gap-2 sm:gap-4"
+      className="h-16 sm:h-[76px] shrink-0 sticky top-0 z-30 bg-surface/95 backdrop-blur border-b border-line flex items-center px-2.5 sm:px-3 gap-2 sm:gap-3"
     >
       {/* Mobile Hamburger button */}
       <button

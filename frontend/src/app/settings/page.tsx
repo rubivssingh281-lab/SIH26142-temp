@@ -1052,7 +1052,7 @@ function SettingsContent() {
   }
 
   return (
-    <div className="p-3.5 sm:p-6 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+    <div className="p-2.5 sm:p-3 min-w-0 w-full">
       <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-4 sm:gap-5 min-w-0">
         {/* Mobile Horizontal Subnav (< lg) */}
         <div className="lg:hidden flex overflow-x-auto no-scrollbar gap-1.5 p-1 bg-surface border border-line rounded-xl shrink-0">
