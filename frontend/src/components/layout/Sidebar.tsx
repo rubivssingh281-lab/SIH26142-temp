@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
-import { CURRENT_USER } from "@/lib/mock-data";
+import { useCurrentUser, type CurrentUserProfile } from "@/lib/auth";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
@@ -32,6 +32,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
+  const user = useCurrentUser();
   const pathname = usePathname();
 
   const renderNavLinks = (closeOnSelect = false) => (
@@ -67,10 +68,10 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         onClick={closeOnSelect ? onClose : undefined}
         className="flex items-center gap-3 px-1 py-2 rounded-lg hover:bg-canvas transition-colors"
       >
-        <Avatar />
+        <Avatar user={user} />
         <div className="min-w-0 leading-tight">
-          <div className="text-[13.5px] font-semibold text-ink truncate">{CURRENT_USER.name}</div>
-          <div className="text-[12px] text-muted truncate">{CURRENT_USER.role}</div>
+          <div className="text-[13.5px] font-semibold text-ink truncate">{user.name}</div>
+          <div className="text-[12px] text-muted truncate">{user.role}</div>
         </div>
         <span className="ml-auto h-2.5 w-2.5 rounded-full bg-success-soft ring-2 ring-success-bg" />
       </Link>
@@ -120,10 +121,15 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   );
 }
 
-function Avatar() {
+function Avatar({ user }: { user: CurrentUserProfile }) {
   return (
-    <div className="h-9 w-9 shrink-0 rounded-full bg-primary text-white grid place-items-center text-[13px] font-semibold">
-      {CURRENT_USER.initials}
+    <div className="h-9 w-9 shrink-0 rounded-full bg-primary text-white grid place-items-center text-[13px] font-semibold overflow-hidden ring-1 ring-primary/20">
+      {user.photoURL ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={user.photoURL} alt={user.name} className="h-full w-full object-cover" />
+      ) : (
+        <span>{user.initials}</span>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, Suspense } from "react";
+import { useState, useMemo, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   User,
@@ -27,7 +27,7 @@ import { Card, Toggle, Checkbox, RatingChip, Button } from "@/components/ui/Prim
 import { LoadingState, ErrorState } from "@/components/ui/PageState";
 import type { ModelType } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { logoutUser } from "@/lib/auth";
+import { logoutUser, useCurrentUser, updateCurrentUser, getEffectiveUser, deriveInitials } from "@/lib/auth";
 
 import { Camera, Clock3, MapPin, Monitor, LogOut } from "lucide-react";
 
@@ -125,8 +125,7 @@ interface TeamMember {
   avatarColor: string;
 }
 
-const members: TeamMember[] = [
-  { id: 1, initials: "AP", name: "Arjun Pratap", email: "arjun.pratap@ntro.gov.in", role: "Admin", projects: ["All Projects"], status: "Active", lastActive: "21 May 2024, 11:30 AM", avatarColor: "#D2691E" },
+const initialTeamMembers: TeamMember[] = [
   { id: 2, initials: "PN", name: "Priya Nair", email: "priya.nair@ntro.gov.in", role: "Analyst", projects: ["Ladakh Border Infra"], projectCount: 3, status: "Active", lastActive: "20 May 2024, 04:15 PM", avatarColor: "#2878BE" },
   { id: 3, initials: "RM", name: "Rohan Mehta", email: "rohan.mehta@ntro.gov.in", role: "Analyst", projects: ["Arunachal Outposts"], projectCount: 2, status: "Active", lastActive: "19 May 2024, 09:40 AM", avatarColor: "#2878BE" },
   { id: 4, initials: "SI", name: "Sana Iqbal", email: "sana.iqbal@ntro.gov.in", role: "Viewer", projects: ["Siachen Glacier Study"], projectCount: 1, status: "Pending Invite", lastActive: "—", avatarColor: "#9CA3AF" },
@@ -476,16 +475,140 @@ function SettingsContent() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const [fullName, setFullName] = useState("Arjun Pratap");
-  const [email, setEmail] = useState("arjun.pratap@ntro.gov.in");
-  const [role, setRole] = useState("NTRO Analyst");
-  const [department, setDepartment] = useState("Space Technology");
-  const [phone, setPhone] = useState("+91 98765 43210");
-  const [darkMode, setDarkMode] = useState(false);
-  const [emailDigest, setEmailDigest] = useState("Daily");
-  const [landingPage, setLandingPage] = useState("Dashboard");
-  const [timezone, setTimezone] = useState("(GMT+05:30) Asia/Kolkata (IST)");
+  const user = useCurrentUser();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [fullName, setFullName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [role, setRole] = useState(user.role);
+  const [department, setDepartment] = useState(user.department);
+  const [phone, setPhone] = useState(user.phone);
+  const [organization, setOrganization] = useState(user.organization);
+  const [employeeId, setEmployeeId] = useState(user.employee_id);
+  const [clearanceLevel, setClearanceLevel] = useState(user.clearance_level);
+  const [region, setRegion] = useState(user.region);
+  const [photoURL, setPhotoURL] = useState<string | undefined>(user.photoURL);
+
+  const [darkMode, setDarkMode] = useState(user.darkMode);
+  const [emailDigest, setEmailDigest] = useState(user.emailDigest || "Daily");
+  const [landingPage, setLandingPage] = useState(user.landingPage || "Dashboard");
+  const [timezone, setTimezone] = useState(user.timezone || "(GMT+05:30) Asia/Kolkata (IST)");
   const ORANGE = "#D2691E";
+
+  const [deviceInfo, setDeviceInfo] = useState("Windows 11 / Chrome");
+  const [sessionTime, setSessionTime] = useState("Active Now");
+
+  const [loadedUserKey, setLoadedUserKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const ua = navigator.userAgent;
+      let os = "Windows";
+      if (ua.includes("Mac")) os = "macOS";
+      else if (ua.includes("Linux")) os = "Linux";
+      else if (ua.includes("Android")) os = "Android";
+      else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
+
+      let browser = "Chrome";
+      if (ua.includes("Firefox")) browser = "Firefox";
+      else if (ua.includes("Edg")) browser = "Edge";
+      else if (ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
+
+      setDeviceInfo(`${os} / ${browser}`);
+      setSessionTime(new Date().toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user && (user.email || user.name)) {
+      const userKey = `${user.email}_${user.photoURL || ""}`;
+      if (loadedUserKey !== userKey) {
+        setLoadedUserKey(userKey);
+        setFullName(user.name);
+        setEmail(user.email);
+        setRole(user.role);
+        setDepartment(user.department);
+        setPhone(user.phone);
+        setOrganization(user.organization);
+        setEmployeeId(user.employee_id);
+        setClearanceLevel(user.clearance_level);
+        setRegion(user.region);
+        setPhotoURL(user.photoURL);
+        setDarkMode(user.darkMode);
+        setEmailDigest(user.emailDigest || "Daily");
+        setLandingPage(user.landingPage || "Dashboard");
+        setTimezone(user.timezone || "(GMT+05:30) Asia/Kolkata (IST)");
+      }
+    }
+  }, [user, loadedUserKey]);
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast("Image size exceeds 5MB limit.", "error");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setPhotoURL(result);
+      updateCurrentUser({ photoURL: result });
+      toast("Profile photo updated successfully.", "success");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePhotoRemove = () => {
+    setPhotoURL(undefined);
+    updateCurrentUser({ photoURL: undefined });
+    toast("Profile photo removed. Restored operator initials avatar.", "info");
+  };
+
+  const handleSaveProfile = () => {
+    updateCurrentUser({
+      name: fullName,
+      email,
+      role,
+      department,
+      phone,
+      organization,
+      employee_id: employeeId,
+      clearance_level: clearanceLevel,
+      region,
+      photoURL,
+      darkMode,
+      emailDigest,
+      landingPage,
+      timezone,
+    });
+    toast("Account profile changes saved successfully.", "success");
+  };
+
+  const handleCancelProfile = () => {
+    const current = getEffectiveUser();
+    setFullName(current.name);
+    setEmail(current.email);
+    setRole(current.role);
+    setDepartment(current.department);
+    setPhone(current.phone);
+    setOrganization(current.organization);
+    setEmployeeId(current.employee_id);
+    setClearanceLevel(current.clearance_level);
+    setRegion(current.region);
+    setPhotoURL(current.photoURL);
+    setDarkMode(current.darkMode);
+    setEmailDigest(current.emailDigest || "Daily");
+    setLandingPage(current.landingPage || "Dashboard");
+    setTimezone(current.timezone || "(GMT+05:30) Asia/Kolkata (IST)");
+    toast("Profile changes discarded.", "info");
+  };
 
   const [savedBilling, setSavedBilling] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
@@ -494,7 +617,42 @@ function SettingsContent() {
   const router = useRouter();
 
   // Team management state
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(members);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => [
+    {
+      id: 1,
+      initials: user.initials,
+      name: user.name,
+      email: user.email,
+      role: "Admin",
+      projects: ["All Projects"],
+      status: "Active",
+      lastActive: "Active Now",
+      avatarColor: "#D2691E",
+    },
+    ...initialTeamMembers,
+  ]);
+
+  useEffect(() => {
+    if (user && user.email) {
+      setTeamMembers((prev) => {
+        const others = prev.filter((m) => m.id !== 1 && m.email !== user.email);
+        return [
+          {
+            id: 1,
+            initials: user.initials,
+            name: user.name,
+            email: user.email,
+            role: "Admin",
+            projects: ["All Projects"],
+            status: "Active",
+            lastActive: "Active Now",
+            avatarColor: "#D2691E",
+          },
+          ...others,
+        ];
+      });
+    }
+  }, [user]);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -2158,11 +2316,35 @@ function SettingsContent() {
                 <SectionCard title="Profile Information">
                   <div className="grid gap-7 md:grid-cols-[132px_minmax(0,1fr)]">
                     <div className="flex flex-col items-center">
-                      <div className="flex h-[108px] w-[108px] items-center justify-center rounded-full text-[36px] font-medium text-white" style={{ backgroundColor: ORANGE }}>AP</div>
-                      <button type="button" onClick={() => toast("Profile photo updated successfully.", "success")} className="mt-4 inline-flex h-[36px] items-center gap-2 rounded-[7px] border border-[#D2691E] px-3 text-[12px] font-medium text-[#D2691E] hover:bg-[#FFF5EF]">
+                      <div className="relative flex h-[108px] w-[108px] items-center justify-center rounded-full text-[36px] font-semibold text-white overflow-hidden ring-2 ring-[#D2691E]/30 shadow-md" style={{ backgroundColor: ORANGE }}>
+                        {photoURL ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={photoURL} alt={fullName} className="h-full w-full object-cover" />
+                        ) : (
+                          <span>{deriveInitials(fullName, email)}</span>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handlePhotoUpload}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="mt-4 inline-flex h-[36px] items-center gap-2 rounded-[7px] border border-[#D2691E] px-3 text-[12px] font-medium text-[#D2691E] hover:bg-[#FFF5EF] transition cursor-pointer"
+                      >
                         <Camera size={14} /> Change Photo
                       </button>
-                      <button type="button" onClick={() => toast("Profile photo removed. Restored operator initials avatar.", "info")} className="mt-2 text-[12px] font-medium text-[#D2691E] hover:underline">Remove</button>
+                      <button
+                        type="button"
+                        onClick={handlePhotoRemove}
+                        className="mt-2 text-[12px] font-medium text-[#D2691E] hover:underline cursor-pointer"
+                      >
+                        Remove
+                      </button>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <InputField label="Full Name" value={fullName} onChange={setFullName} />
@@ -2180,19 +2362,19 @@ function SettingsContent() {
                   <div className="rounded-lg bg-slate-50">
                     <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                       <span className="text-[13px] text-slate-600">Organization</span>
-                      <span className="text-right text-[12px] font-medium text-slate-800">National Technical Research Organisation</span>
+                      <span className="text-right text-[12px] font-medium text-slate-800">{organization || "National Technical Research Organisation"}</span>
                     </div>
                     <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
                       <span className="text-[13px] text-slate-600">Employee ID</span>
-                      <span className="font-mono text-[12px] text-slate-800">NTRO-AN-02871</span>
+                      <span className="font-mono text-[12px] text-slate-800">{employeeId || "NTRO-AN-02871"}</span>
                     </div>
                     <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
                       <span className="text-[13px] text-slate-600">Clearance Level</span>
-                      <span className="rounded-md bg-[#FFF2D9] px-3 py-1.5 text-[11px] font-medium text-[#B7791F]">Level 3 - Confidential</span>
+                      <span className="rounded-md bg-[#FFF2D9] px-3 py-1.5 text-[11px] font-medium text-[#B7791F]">{clearanceLevel || "Level 3 - Confidential"}</span>
                     </div>
                     <div className="flex items-center justify-between px-4 py-4">
                       <span className="text-[13px] text-slate-600">Region / Base Assigned</span>
-                      <span className="text-[12px] font-medium text-slate-800">New Delhi, India</span>
+                      <span className="text-[12px] font-medium text-slate-800">{region || "New Delhi, India"}</span>
                     </div>
                   </div>
                 </SectionCard>
@@ -2249,7 +2431,7 @@ function SettingsContent() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[12px] text-slate-500">Last Login</div>
-                        <div className="mt-1 text-[13px] font-medium text-slate-800">21 May 2024, 11:30 AM IST</div>
+                        <div className="mt-1 text-[13px] font-medium text-slate-800">{sessionTime}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4 border-b border-slate-100 py-4">
@@ -2258,7 +2440,7 @@ function SettingsContent() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[12px] text-slate-500">Device / Browser</div>
-                        <div className="mt-1 text-[13px] font-medium text-slate-800">Windows 11 / Chrome 124.0.0.0</div>
+                        <div className="mt-1 text-[13px] font-medium text-slate-800">{deviceInfo}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4 border-b border-slate-100 py-4">
@@ -2267,7 +2449,7 @@ function SettingsContent() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[12px] text-slate-500">IP Location</div>
-                        <div className="mt-1 text-[13px] font-medium text-slate-800">103.***.**.45 (New Delhi, India)</div>
+                        <div className="mt-1 text-[13px] font-medium text-slate-800">{region || "New Delhi, India"}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4 py-4">
@@ -2287,8 +2469,8 @@ function SettingsContent() {
               </div>
 
               <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <button type="button" onClick={() => toast("Profile changes discarded.", "info")} className="h-[44px] min-w-[145px] rounded-[7px] border border-slate-300 bg-white px-6 text-[13px] font-medium text-slate-800 transition hover:bg-slate-50">Cancel</button>
-                <button type="button" onClick={() => toast("Account profile changes saved successfully.", "success")} className="inline-flex h-[44px] min-w-[185px] items-center justify-center gap-2 rounded-[7px] px-6 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-95" style={{ backgroundColor: ORANGE }}>
+                <button type="button" onClick={handleCancelProfile} className="h-[44px] min-w-[145px] rounded-[7px] border border-slate-300 bg-white px-6 text-[13px] font-medium text-slate-800 transition hover:bg-slate-50 cursor-pointer">Cancel</button>
+                <button type="button" onClick={handleSaveProfile} className="inline-flex h-[44px] min-w-[185px] items-center justify-center gap-2 rounded-[7px] px-6 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-95 cursor-pointer" style={{ backgroundColor: ORANGE }}>
                   <Save size={16} /> Save Changes
                 </button>
               </div>

@@ -26,11 +26,11 @@ import {
   Send,
   Menu,
 } from "lucide-react";
-import { CURRENT_USER, PROJECTS } from "@/lib/mock-data";
+import { PROJECTS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
-import { logoutUser } from "@/lib/auth";
+import { logoutUser, useCurrentUser } from "@/lib/auth";
 
 const CRUMBS: Record<string, string[]> = {
   "/dashboard": ["Projects", "Ladakh Border Infrastructure", "SR_v2", "Dashboard"],
@@ -109,6 +109,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
 type MenuType = "project" | "notifications" | "user" | null;
 
 export function Topbar({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) {
+  const user = useCurrentUser();
   const pathname = usePathname();
   const router = useRouter();
   const topbarRef = useRef<HTMLDivElement>(null);
@@ -598,12 +599,17 @@ export function Topbar({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
               openMenu === "user" ? "bg-primary-50/50 shadow-sm" : "hover:bg-canvas"
             )}
           >
-            <div className="h-9 w-9 rounded-full bg-primary text-white grid place-items-center text-[13px] font-semibold shrink-0">
-              {CURRENT_USER.initials}
+            <div className="h-9 w-9 rounded-full bg-primary text-white grid place-items-center text-[13px] font-semibold shrink-0 overflow-hidden ring-1 ring-primary/20">
+              {user.photoURL ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.photoURL} alt={user.name} className="h-full w-full object-cover" />
+              ) : (
+                <span>{user.initials}</span>
+              )}
             </div>
             <div className="hidden md:block leading-tight text-left">
-              <div className="text-[13.5px] font-semibold text-ink">{CURRENT_USER.name}</div>
-              <div className="text-[12px] text-muted">{CURRENT_USER.role}</div>
+              <div className="text-[13.5px] font-semibold text-ink">{user.name}</div>
+              <div className="text-[12px] text-muted">{user.role}</div>
             </div>
             <ChevronDown
               size={16}
@@ -616,17 +622,22 @@ export function Topbar({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
               {/* User Identity Card */}
               <div className="p-3 rounded-lg bg-canvas/60 border border-line mb-2">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary text-white grid place-items-center text-[14px] font-bold shrink-0">
-                    {CURRENT_USER.initials}
+                  <div className="h-10 w-10 rounded-full bg-primary text-white grid place-items-center text-[14px] font-bold shrink-0 overflow-hidden ring-1 ring-primary/20">
+                    {user.photoURL ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={user.photoURL} alt={user.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <span>{user.initials}</span>
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13.5px] font-semibold text-ink truncate">{CURRENT_USER.name}</div>
-                    <div className="text-[11px] text-muted truncate">arjun.pratap@ntro.gov.in</div>
+                    <div className="text-[13.5px] font-semibold text-ink truncate">{user.name}</div>
+                    <div className="text-[11px] text-muted truncate">{user.email}</div>
                   </div>
                 </div>
                 <div className="mt-2.5 pt-2 border-t border-line/60 flex items-center justify-between text-[10px]">
-                  <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">NTRO Analyst</span>
-                  <span className="text-muted font-mono">Level 3 Clearance</span>
+                  <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">{user.role || "Analyst"}</span>
+                  <span className="text-muted font-mono">{user.clearance_level || "Level 3 Clearance"}</span>
                 </div>
               </div>
 

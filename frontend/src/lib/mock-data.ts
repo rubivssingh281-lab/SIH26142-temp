@@ -24,9 +24,9 @@ const spark = (base: number, n = 16, amp = 8): { t: string; v: number }[] =>
   }));
 
 export const CURRENT_USER: CurrentUser = {
-  name: "Arjun Pratap",
-  role: "NTRO Analyst",
-  initials: "AP",
+  name: "Operator",
+  role: "Geospatial Analyst",
+  initials: "OP",
 };
 
 export const MODEL_OPTIONS: ModelOption[] = [
@@ -154,7 +154,7 @@ export const PROJECTS: Project[] = [
       { date: "21 May", status: "queued" },
     ],
     team: [
-      { initials: "AP", name: "Arjun Pratap", color: "#D6532B" },
+      { initials: "OP", name: "Operator", color: "#D6532B" },
       { initials: "RK", name: "Ravi Kumar", color: "#0F8C7F" },
       { initials: "SS", name: "Sneha Singh", color: "#8A857B" },
     ],
