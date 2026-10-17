@@ -19,7 +19,7 @@ export async function POST(req: Request) {
       role: "Lead Analyst",
       organization: "National Geospatial Operations",
       department: "Space Technology & Remote Sensing",
-      phone: body.phone || "+91 98765 43210",
+      phone: body.phone && body.phone !== "+91 98765 43210" ? body.phone : "",
       employee_id: "GEO-2026",
       clearance_level: "Level 3 - Confidential",
       region: "New Delhi, India",

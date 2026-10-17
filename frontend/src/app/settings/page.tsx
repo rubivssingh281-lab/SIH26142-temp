@@ -32,12 +32,17 @@ import { logoutUser, useCurrentUser, updateCurrentUser, getEffectiveUser, derive
 import { Camera, Clock3, MapPin, Monitor, LogOut } from "lucide-react";
 
 
-function InputField({ label, value, onChange, type = "text" }: any) {
+function InputField({ label, value, onChange, type = "text", placeholder = "" }: any) {
   return (
     <div className="space-y-1.5">
       <label className="block text-[13px] font-medium text-slate-700">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange?.(e.target.value)} className="h-[42px] w-full rounded-[7px] border border-slate-200 bg-white px-3.5 text-[13px] text-slate-800 outline-none transition focus:border-[#D2691E] focus:ring-2 focus:ring-[#D2691E]/10" />
-
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange?.(e.target.value)}
+        className="h-[42px] w-full rounded-[7px] border border-slate-200 bg-white px-3.5 text-[13px] text-slate-800 placeholder:text-slate-400 outline-none transition focus:border-[#D2691E] focus:ring-2 focus:ring-[#D2691E]/10"
+      />
     </div>
   );
 }
@@ -478,11 +483,12 @@ function SettingsContent() {
   const user = useCurrentUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const initialPhone = user.phone && user.phone !== "+91 98765 43210" ? user.phone : "";
   const [fullName, setFullName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [role, setRole] = useState(user.role);
   const [department, setDepartment] = useState(user.department);
-  const [phone, setPhone] = useState(user.phone);
+  const [phone, setPhone] = useState(initialPhone);
   const [organization, setOrganization] = useState(user.organization);
   const [employeeId, setEmployeeId] = useState(user.employee_id);
   const [clearanceLevel, setClearanceLevel] = useState(user.clearance_level);
@@ -534,7 +540,8 @@ function SettingsContent() {
         setEmail(user.email);
         setRole(user.role);
         setDepartment(user.department);
-        setPhone(user.phone);
+        const cleanPhone = user.phone && user.phone !== "+91 98765 43210" ? user.phone : "";
+        setPhone(cleanPhone);
         setOrganization(user.organization);
         setEmployeeId(user.employee_id);
         setClearanceLevel(user.clearance_level);
@@ -686,7 +693,7 @@ function SettingsContent() {
 
   // Notifications phone modal state
   const [showPhoneModal, setShowPhoneModal] = useState(false);
-  const [newPhoneInput, setNewPhoneInput] = useState("+91 98765 43210");
+  const [newPhoneInput, setNewPhoneInput] = useState(initialPhone);
   const [phoneOtpStep, setPhoneOtpStep] = useState(false);
   const [phoneOtpCode, setPhoneOtpCode] = useState("");
 
@@ -2352,7 +2359,7 @@ function SettingsContent() {
                       <InputField label="Role / Designation" value={role} onChange={setRole} />
                       <SelectField label="Department" value={department} options={["Space Technology", "Remote Sensing", "Geospatial Intelligence", "Research & Development"]} onChange={setDepartment} />
                       <div className="sm:col-span-2">
-                        <InputField label="Phone Number" value={phone} onChange={setPhone} type="tel" />
+                        <InputField label="Phone Number" value={phone} onChange={setPhone} type="tel" placeholder="+91 98765 00000" />
                       </div>
                     </div>
                   </div>
@@ -3089,7 +3096,7 @@ function SettingsContent() {
                 <label className="mb-1.5 block text-[12px] font-medium text-slate-700">Phone Number (with Country Code)</label>
                 <input
                   type="tel"
-                  placeholder="+91 98765 43210"
+                  placeholder="+91 98765 00000"
                   value={newPhoneInput}
                   onChange={(e) => setNewPhoneInput(e.target.value)}
                   disabled={phoneOtpStep}

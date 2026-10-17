@@ -190,7 +190,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
         role: result?.user?.role || "Lead Analyst",
         organization: result?.user?.organization || "National Geospatial Operations",
         department: "Space Technology & Remote Sensing",
-        phone: googleUser.phoneNumber || "+91 98765 43210",
+        phone: googleUser.phoneNumber || "",
         employee_id: `GEO-${Math.floor(10000 + Math.random() * 90000)}`,
         clearance_level: "Level 3 - Confidential",
         region: "New Delhi, India",
