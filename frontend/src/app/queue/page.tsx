@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Clock,
@@ -20,12 +20,13 @@ import {
   Info,
   Mail,
   Play,
+  RotateCw,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { downloadFile } from "@/lib/download";
 import { toast, updateToast } from "@/components/ui/Toast";
-import { Card, StatusBadge, Button, ProgressBar, Donut, Pill } from "@/components/ui/Primitives";
+import { Card, StatusBadge, Button, ProgressBar } from "@/components/ui/Primitives";
 import { UtilizationChart } from "@/components/ui/Charts";
 import { SatelliteTile } from "@/components/map/SatelliteTile";
 import { LoadingState, ErrorState } from "@/components/ui/PageState";
@@ -34,52 +35,123 @@ import { cn } from "@/lib/utils";
 
 export default function QueuePage() {
   const [status, setStatus] = useState("all");
+  const [projectFilter, setProjectFilter] = useState("all");
   const [q, setQ] = useState("");
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+
   const { data, error, loading, refetch } = useFetch(() => api.getQueue({ status, q }), [status, q]);
+
+  // Auto-expand first processing job when data loads
+  const activeJobs = useMemo(() => {
+    if (!data?.jobs) return [];
+    return data.jobs.filter((j) => {
+      const matchProject = projectFilter === "all" || j.project.toLowerCase().includes(projectFilter.toLowerCase());
+      return matchProject;
+    });
+  }, [data?.jobs, projectFilter]);
 
   if (loading && !data) return <div className="p-6"><LoadingState /></div>;
   if (error) return <div className="p-6"><ErrorState error={error} /></div>;
   if (!data) return null;
 
-  const { stats, jobs, cluster } = data;
+  const { stats, cluster } = data;
 
   return (
-    <div className="p-2.5 sm:p-6 space-y-3 sm:space-y-5 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
-      {/* Stat cards: sideways scrollable on mobile */}
-      <div className="flex overflow-x-auto gap-2 pb-1 snap-x snap-mandatory no-scrollbar sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4 -mx-2.5 px-2.5 sm:mx-0 sm:px-0">
-        <div className="w-[130px] sm:w-auto shrink-0 snap-start">
-          <QueueStat title="Queued" value={stats.queued} sub="Jobs waiting" icon={<Clock size={16} className="text-warning-soft sm:hidden" />} bg="bg-warning-bg" />
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-[1600px] mx-auto min-w-0 w-full overflow-hidden">
+      {/* 1. Header with Title & Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+        <div>
+          <h1 className="text-[22px] sm:text-[27px] font-bold tracking-tight text-slate-900">Processing Queue</h1>
+          <p className="text-[13px] text-slate-500 mt-0.5">Real-time status of super-resolution inference pipelines and GPU compute allocations</p>
         </div>
-        <Card className="w-[150px] sm:w-auto shrink-0 snap-start p-2.5 sm:p-4">
-          <div className="flex items-start justify-between gap-1">
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] sm:text-[13px] text-muted flex items-center gap-1 truncate">
-                <span className="h-6 w-6 sm:h-8 sm:w-8 rounded-md sm:rounded-lg bg-teal-50 grid place-items-center shrink-0">
-                  <Boxes size={14} className="text-teal" />
-                </span>
-                Active
-              </div>
-              <div className="text-[18px] sm:text-[30px] font-semibold mt-0.5 sm:mt-1">{stats.processing}</div>
-              <div className="text-[10px] sm:text-[12.5px] text-muted truncate">Running jobs</div>
-            </div>
-            <div className="text-center shrink-0">
-              <Donut value={stats.avg_progress_pct} size={36} color="#0F8C7F" />
-              <div className="text-[9px] sm:text-[11px] text-muted mt-0.5">{stats.avg_progress_pct}%</div>
-            </div>
-          </div>
-        </Card>
-        <div className="w-[130px] sm:w-auto shrink-0 snap-start">
-          <QueueStat title="Completed" value={stats.completed_today} sub="Today" icon={<CheckCircle2 size={16} className="text-success sm:hidden" />} bg="bg-success-bg" />
-        </div>
-        <div className="w-[130px] sm:w-auto shrink-0 snap-start">
-          <QueueStat title="Failed" value={stats.failed} sub="Errors" icon={<AlertOctagon size={16} className="text-danger sm:hidden" />} bg="bg-danger-bg" />
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Link
+            href="/new-job"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#D2691E] hover:bg-[#b85816] text-white text-[13px] font-semibold shadow-xs transition hover:brightness-105 cursor-pointer"
+          >
+            <Boxes size={16} /> New Enhancement Job
+          </Link>
         </div>
       </div>
 
-      {/* Filters: Sideways status pills + compact 2-col inputs */}
-      <Card className="p-2.5 sm:p-4">
+      {/* 2. Top Metric Cards (Tabs) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Card 1: Queued */}
+        <Card className="p-4 sm:p-5 h-full relative overflow-hidden transition-all duration-200 hover:shadow-md border border-slate-200/90 bg-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11.5px] sm:text-[12.5px] font-semibold text-slate-500 uppercase tracking-wider">Queued</div>
+              <div className="text-[26px] sm:text-[34px] font-bold text-slate-900 leading-tight mt-1 tracking-tight">{stats.queued}</div>
+              <div className="text-[11.5px] sm:text-[12.5px] text-amber-700 mt-1 font-medium flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                <span>Jobs waiting</span>
+              </div>
+            </div>
+            <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/60 grid place-items-center shrink-0 shadow-2xs">
+              <Clock size={22} strokeWidth={2.2} />
+            </div>
+          </div>
+        </Card>
+
+        {/* Card 2: Active / Running */}
+        <Card className="p-4 sm:p-5 h-full relative overflow-hidden transition-all duration-200 hover:shadow-md border border-slate-200/90 bg-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11.5px] sm:text-[12.5px] font-semibold text-slate-500 uppercase tracking-wider">Active</div>
+              <div className="text-[26px] sm:text-[34px] font-bold text-slate-900 leading-tight mt-1 tracking-tight">{stats.processing}</div>
+              <div className="text-[11.5px] sm:text-[12.5px] text-teal mt-1 font-medium flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-teal" />
+                </span>
+                <span>Running ({stats.avg_progress_pct}% avg)</span>
+              </div>
+            </div>
+            <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-teal-50 text-teal border border-teal-200/60 grid place-items-center shrink-0 shadow-2xs">
+              <Boxes size={22} strokeWidth={2.2} />
+            </div>
+          </div>
+        </Card>
+
+        {/* Card 3: Completed */}
+        <Card className="p-4 sm:p-5 h-full relative overflow-hidden transition-all duration-200 hover:shadow-md border border-slate-200/90 bg-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11.5px] sm:text-[12.5px] font-semibold text-slate-500 uppercase tracking-wider">Completed</div>
+              <div className="text-[26px] sm:text-[34px] font-bold text-slate-900 leading-tight mt-1 tracking-tight">{stats.completed_today}</div>
+              <div className="text-[11.5px] sm:text-[12.5px] text-emerald-700 mt-1 font-medium flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span>Today</span>
+              </div>
+            </div>
+            <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 grid place-items-center shrink-0 shadow-2xs">
+              <CheckCircle2 size={22} strokeWidth={2.2} />
+            </div>
+          </div>
+        </Card>
+
+        {/* Card 4: Failed */}
+        <Card className="p-4 sm:p-5 h-full relative overflow-hidden transition-all duration-200 hover:shadow-md border border-slate-200/90 bg-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11.5px] sm:text-[12.5px] font-semibold text-slate-500 uppercase tracking-wider">Failed</div>
+              <div className="text-[26px] sm:text-[34px] font-bold text-slate-900 leading-tight mt-1 tracking-tight">{stats.failed}</div>
+              <div className="text-[11.5px] sm:text-[12.5px] text-rose-700 mt-1 font-medium flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-rose-500" />
+                <span>{stats.failed === 0 ? "Zero errors" : "Errors"}</span>
+              </div>
+            </div>
+            <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-rose-50 text-rose-600 border border-rose-200/60 grid place-items-center shrink-0 shadow-2xs">
+              <AlertOctagon size={22} strokeWidth={2.2} />
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* 3. Filters Bar */}
+      <Card className="p-4 sm:p-5 border border-slate-200/90 bg-white shadow-xs">
         {/* Horizontal Status Filter Pills on mobile */}
-        <div className="flex overflow-x-auto gap-1.5 pb-2 no-scrollbar border-b border-line mb-2.5 sm:hidden">
+        <div className="flex overflow-x-auto gap-1.5 pb-2.5 no-scrollbar border-b border-line mb-3 sm:hidden">
           {[
             ["all", "All"],
             ["processing", `Processing (${stats.processing})`],
@@ -91,10 +163,10 @@ export default function QueuePage() {
               key={key}
               onClick={() => setStatus(key)}
               className={cn(
-                "px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors shrink-0",
+                "px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap transition-colors shrink-0",
                 status === key
-                  ? "bg-primary text-white"
-                  : "bg-surface border border-line text-ink-soft hover:bg-canvas"
+                  ? "bg-[#D2691E] text-white"
+                  : "bg-surface border border-line text-slate-700 hover:bg-slate-50"
               )}
             >
               {label}
@@ -102,62 +174,131 @@ export default function QueuePage() {
           ))}
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3">
-          <div className="flex-1 min-w-0 flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-              <input className="input pl-9 h-9 sm:h-11 text-[12px] sm:text-[14px]" placeholder="Search Job ID or Project" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 sm:gap-4 items-end">
+          {/* Search Field */}
+          <div>
+            <label className="block text-[12px] font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Search Queue</label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  className="w-full h-11 pl-10 pr-9 rounded-lg border border-slate-200 bg-white text-[13.5px] text-slate-800 outline-none transition focus:border-[#D2691E] focus:ring-2 focus:ring-[#D2691E]/10"
+                  placeholder="Search by Job ID, Project, or compute node…"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+                {q && (
+                  <button
+                    onClick={() => setQ("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs p-1"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={refetch}
+                className="h-11 w-11 grid place-items-center rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-950 transition shrink-0 shadow-2xs cursor-pointer"
+                title="Refresh queue"
+              >
+                <RefreshCw size={16} className={cn("transition-transform duration-500", loading && "animate-spin text-[#D2691E]")} />
+              </button>
             </div>
-            <button onClick={refetch} className="h-9 w-9 sm:h-11 sm:w-11 grid place-items-center rounded-lg border border-line-strong hover:bg-canvas transition shrink-0" title="Refresh queue">
-              <RefreshCw size={15} className="text-ink-soft" />
-            </button>
           </div>
 
-          {/* Sideways 2-column secondary filters on mobile */}
-          <div className="grid grid-cols-2 sm:flex sm:items-end gap-2 sm:gap-3">
+          {/* Secondary Dropdown Filters */}
+          <div className="grid grid-cols-2 sm:flex sm:items-end gap-2.5 sm:gap-3">
             <div className="hidden sm:block">
-              <FilterSelect label="Status" value={status} onChange={setStatus} options={[["all", "All"], ["processing", "Processing"], ["queued", "Queued"], ["completed", "Completed"], ["failed", "Failed"]]} />
+              <FilterSelect
+                label="Status"
+                value={status}
+                onChange={setStatus}
+                options={[
+                  ["all", `All (${data.total || data.jobs.length})`],
+                  ["processing", `Processing (${stats.processing})`],
+                  ["queued", `Queued (${stats.queued})`],
+                  ["completed", `Completed (${stats.completed_today})`],
+                  ["failed", `Failed (${stats.failed})`],
+                ]}
+              />
             </div>
             <div>
-              <FilterSelect label="Project" value="all" onChange={() => {}} options={[["all", "All Projects"], ["ladakh", "Ladakh"], ["arunachal", "Arunachal"], ["siachen", "Siachen"]]} />
+              <FilterSelect
+                label="Project"
+                value={projectFilter}
+                onChange={setProjectFilter}
+                options={[
+                  ["all", "All Projects"],
+                  ["Ladakh", "Ladakh Border Infra"],
+                  ["Arunachal", "Arunachal Outposts"],
+                  ["Siachen", "Siachen Glacier Study"],
+                  ["Western", "Western Border Roads"],
+                ]}
+              />
             </div>
             <div>
-              <div className="field-label text-[11px] sm:text-[13px] mb-1">Date Range</div>
-              <button className="input flex items-center gap-1.5 w-full sm:w-[200px] h-9 sm:h-11 text-[11.5px] sm:text-[13px] px-2.5">
-                <Calendar size={13} className="text-muted shrink-0" />
-                <span className="truncate">May 18 - 21</span>
+              <label className="block text-[12px] font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Date Range</label>
+              <button
+                type="button"
+                className="flex items-center justify-between gap-2 w-full sm:w-[175px] h-11 px-3 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-800 hover:bg-slate-50 transition cursor-pointer"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <Calendar size={14} className="text-[#D2691E] shrink-0" />
+                  <span className="truncate font-medium">May 18 - 21</span>
+                </div>
+                <ChevronDown size={14} className="text-slate-400 shrink-0" />
               </button>
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Main split */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4 sm:gap-5 min-w-0">
-        <Card className="p-0 overflow-hidden">
+      {/* 4. Main Split: Jobs Table & GPU Cluster Load */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 sm:gap-5 min-w-0">
+        <Card className="p-0 overflow-hidden border border-slate-200/90 bg-white shadow-xs">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-[13px]">
+            <table className="w-full min-w-[760px] text-[13px]">
               <thead>
-                <tr className="text-left text-muted border-b border-line bg-canvas/40">
-                  <th className="px-4 py-3 font-medium">Job ID</th>
-                  <th className="px-2 py-3 font-medium">Project</th>
-                  <th className="px-2 py-3 font-medium">Preview (LR → SR)</th>
-                  <th className="px-2 py-3 font-medium">Status</th>
-                  <th className="px-2 py-3 font-medium">Compute Node</th>
-                  <th className="px-2 py-3 font-medium">Started</th>
-                  <th className="px-2 py-3 font-medium">Est. Completion</th>
-                  <th className="px-4 py-3" />
+                <tr className="text-left text-slate-600 border-b border-slate-200 bg-slate-50/90">
+                  <th className="px-4 py-3.5 font-semibold text-[11.5px] uppercase tracking-wider">Job ID</th>
+                  <th className="px-3 py-3.5 font-semibold text-[11.5px] uppercase tracking-wider">Project</th>
+                  <th className="px-3 py-3.5 font-semibold text-[11.5px] uppercase tracking-wider">Preview (LR → SR)</th>
+                  <th className="px-3 py-3.5 font-semibold text-[11.5px] uppercase tracking-wider">Status</th>
+                  <th className="px-3 py-3.5 font-semibold text-[11.5px] uppercase tracking-wider">Compute Node</th>
+                  <th className="px-3 py-3.5 font-semibold text-[11.5px] uppercase tracking-wider">Started</th>
+                  <th className="px-3 py-3.5 font-semibold text-[11.5px] uppercase tracking-wider">Est. Completion</th>
+                  <th className="px-4 py-3.5 text-right font-semibold text-[11.5px] uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {jobs.map((j, idx) => (
-                  <JobRow key={j.job_id} job={j} expanded={idx === 0 && j.status === "processing"} onRefresh={refetch} />
-                ))}
+              <tbody className="divide-y divide-slate-100">
+                {activeJobs.map((j, idx) => {
+                  const isExpanded = expandedJobId === j.job_id || (expandedJobId === null && idx === 0 && j.status === "processing");
+                  return (
+                    <JobRow
+                      key={j.job_id}
+                      job={j}
+                      expanded={isExpanded}
+                      onToggleExpand={() => setExpandedJobId(isExpanded ? "" : j.job_id)}
+                      onRefresh={refetch}
+                    />
+                  );
+                })}
+                {activeJobs.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-12 text-center text-[13.5px] text-slate-500">
+                      No jobs match the specified criteria.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between px-4 py-3 border-t border-line text-[13px]">
-            <span className="text-muted">Showing 1 to {jobs.length} of {data.total} jobs</span>
+
+          {/* Table Pagination Footer */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-slate-200 bg-slate-50/60 text-[13px]">
+            <span className="text-slate-500 font-medium">
+              Showing 1 to {activeJobs.length} of {data.total} jobs
+            </span>
             <div className="flex items-center gap-1">
               <PageBtn><ChevronLeft size={15} /></PageBtn>
               <PageBtn active>1</PageBtn>
@@ -165,41 +306,77 @@ export default function QueuePage() {
               <PageBtn>3</PageBtn>
               <PageBtn><ChevronRight size={15} /></PageBtn>
             </div>
-            <div className="flex items-center gap-2 text-muted">
-              Rows per page
-              <span className="inline-flex items-center gap-1 border border-line-strong rounded-md px-2 py-1">10 <ChevronDown size={13} /></span>
+            <div className="flex items-center gap-2 text-slate-600 font-medium">
+              <span>Rows per page</span>
+              <span className="inline-flex items-center gap-1.5 border border-slate-200 bg-white rounded-md px-2.5 py-1 text-[12px] font-semibold text-slate-800 shadow-2xs">
+                10 <ChevronDown size={13} className="text-slate-400" />
+              </span>
             </div>
           </div>
         </Card>
 
-        {/* GPU Cluster panel */}
-        <Card className="p-5 h-fit">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-1.5"><h3 className="text-[15px] font-semibold">GPU Cluster Load</h3><Info size={14} className="text-muted" /></div>
-            <span className="inline-flex items-center gap-1.5 text-[12.5px] text-teal"><span className="h-2 w-2 rounded-full bg-teal" /> Healthy</span>
+        {/* 5. GPU Cluster Load Panel */}
+        <Card className="p-5 h-fit border border-slate-200/90 bg-white shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[15px] font-semibold text-slate-900">GPU Cluster Load</h3>
+              <Info size={14} className="text-slate-400" />
+            </div>
+            <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 rounded-full">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
+              </span>
+              Healthy
+            </span>
           </div>
-          <div className="text-[12.5px] text-muted mt-3">Overall Utilization</div>
-          <div className="text-[34px] font-semibold leading-none">{cluster.overall_utilization_pct}%</div>
-          <div className="text-[12px] text-muted">Average</div>
-          <div className="mt-2"><UtilizationChart data={cluster.trend} /></div>
 
-          <div className="text-[12.5px] text-muted mt-4 mb-2">Node Utilization</div>
-          <div className="space-y-3">
-            {cluster.nodes.map((n) => (
-              <div key={n.name}>
-                <div className="flex justify-between text-[12.5px] mb-1">
-                  <span className="text-ink-soft">{n.name}</span>
-                  <span className="font-medium text-ink">{n.utilization_pct}%</span>
-                </div>
-                <ProgressBar value={n.utilization_pct} tone={n.utilization_pct > 60 ? "teal" : "warning"} />
-              </div>
-            ))}
+          <div className="mt-3.5 mb-2">
+            <div className="text-[11.5px] font-semibold text-slate-500 uppercase tracking-wider">Overall Utilization</div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-[36px] font-extrabold text-slate-950 tracking-tight leading-none">
+                {cluster.overall_utilization_pct}%
+              </span>
+              <span className="text-[12px] font-medium text-slate-500">24h Cluster Avg</span>
+            </div>
           </div>
+
+          <div className="mt-3 -mx-2">
+            <UtilizationChart data={cluster.trend} />
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-slate-100">
+            <div className="flex items-center justify-between text-[11.5px] font-semibold text-slate-500 uppercase tracking-wider mb-3">
+              <span>Node Allocation</span>
+              <span>Load</span>
+            </div>
+            <div className="space-y-3">
+              {cluster.nodes.map((n) => (
+                <div key={n.name} className="space-y-1">
+                  <div className="flex justify-between text-[12.5px]">
+                    <span className="font-mono text-slate-700 font-medium">{n.name}</span>
+                    <span className="font-mono font-semibold text-slate-900">{n.utilization_pct}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all duration-500",
+                        n.utilization_pct > 80 ? "bg-amber-500" : n.utilization_pct > 60 ? "bg-teal" : "bg-emerald-500"
+                      )}
+                      style={{ width: `${n.utilization_pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <Link
             href="/cluster"
-            className="mt-5 w-full inline-flex items-center justify-center gap-1.5 text-primary text-[13.5px] font-medium hover:underline transition"
+            className="mt-6 w-full h-10 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[#D2691E] font-medium text-[13px] transition group shadow-2xs"
           >
-            View Cluster Details <ArrowRight size={15} />
+            <span>View Cluster Details</span>
+            <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
           </Link>
         </Card>
       </div>
@@ -238,20 +415,43 @@ async function simulateCompleteJob(id: string, onRefresh?: () => void) {
   }
 }
 
-function JobRow({ job, expanded, onRefresh }: { job: JobDetail; expanded?: boolean; onRefresh?: () => void }) {
+function JobRow({
+  job,
+  expanded,
+  onToggleExpand,
+  onRefresh,
+}: {
+  job: JobDetail;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+  onRefresh?: () => void;
+}) {
   return (
     <>
-      <tr className={cn("border-b border-line", expanded && "border-b-0")}>
-        <td className="px-4 py-3 font-medium text-ink whitespace-nowrap">{job.job_id}</td>
-        <td className="px-2 py-3 text-ink-soft whitespace-nowrap">{job.project}</td>
-        <td className="px-2 py-3">
+      <tr className={cn("transition-colors hover:bg-slate-50/70", expanded && "bg-slate-50/50")}>
+        <td className="px-4 py-3.5 font-mono font-semibold text-slate-900 whitespace-nowrap">
+          <button
+            onClick={onToggleExpand}
+            className="hover:text-[#D2691E] hover:underline text-left cursor-pointer inline-flex items-center gap-1.5"
+            title="Click to toggle pipeline stages"
+          >
+            <span>{job.job_id}</span>
+            <ChevronDown size={13} className={cn("text-slate-400 transition-transform duration-200", expanded && "rotate-180 text-[#D2691E]")} />
+          </button>
+        </td>
+        <td className="px-3 py-3.5 text-slate-800 font-medium whitespace-nowrap">{job.project}</td>
+        <td className="px-3 py-3.5">
           <div className="flex items-center gap-1.5">
-            <div className="h-9 w-9 rounded overflow-hidden"><SatelliteTile seed={job.lr_thumb ?? job.job_id} variant="lr" className="h-full w-full" /></div>
-            <ArrowRight size={13} className="text-muted" />
-            <div className="h-9 w-9 rounded overflow-hidden"><SatelliteTile seed={job.sr_thumb ?? job.job_id} variant="sr" className="h-full w-full" /></div>
+            <div className="h-9 w-9 rounded-md border border-slate-200 overflow-hidden shadow-2xs relative" title="Low-Resolution Input">
+              <SatelliteTile seed={job.lr_thumb ?? job.job_id} variant="lr" className="h-full w-full object-cover" />
+            </div>
+            <ArrowRight size={13} className="text-slate-400 shrink-0" />
+            <div className="h-9 w-9 rounded-md border border-teal/30 overflow-hidden shadow-2xs relative" title="Super-Resolution Output">
+              <SatelliteTile seed={job.sr_thumb ?? job.job_id} variant="sr" className="h-full w-full object-cover" />
+            </div>
           </div>
         </td>
-        <td className="px-2 py-3">
+        <td className="px-3 py-3.5">
           <div className="flex items-center gap-2">
             <StatusBadge status={job.status} />
             {job.status === "failed" && (
@@ -263,34 +463,40 @@ function JobRow({ job, expanded, onRefresh }: { job: JobDetail; expanded?: boole
                     onRefresh?.();
                   }, 1200);
                 }}
-                className="text-[12px] px-2 py-1 rounded border border-line-strong hover:bg-canvas text-primary font-medium transition"
+                className="text-[11.5px] px-2 py-0.5 rounded-md border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 font-semibold transition cursor-pointer flex items-center gap-1"
               >
-                Retry
+                <RotateCw size={11} /> Retry
               </button>
             )}
           </div>
           {job.status === "processing" && (
-            <div className="mt-1.5 flex items-center gap-2 w-[130px]"><ProgressBar value={job.progress ?? 0} /><span className="text-[11px] text-muted">{job.progress}%</span></div>
+            <div className="mt-1.5 flex items-center gap-2 w-[130px]">
+              <ProgressBar value={job.progress ?? 0} tone="teal" />
+              <span className="text-[11px] font-semibold text-teal-700">{job.progress}%</span>
+            </div>
           )}
         </td>
-        <td className="px-2 py-3 text-ink-soft whitespace-nowrap"><div>{job.compute_node}</div><div className="text-[11px] text-muted">{job.gpu}</div></td>
-        <td className="px-2 py-3 text-ink-soft whitespace-nowrap text-[12.5px]">{job.started}</td>
-        <td className="px-2 py-3 text-ink-soft whitespace-nowrap text-[12.5px]">{job.eta}</td>
-        <td className="px-4 py-3">
+        <td className="px-3 py-3.5 text-slate-800 whitespace-nowrap">
+          <div className="font-semibold text-slate-800 text-[13px]">{job.compute_node}</div>
+          <div className="text-[11px] text-slate-500 font-mono">{job.gpu}</div>
+        </td>
+        <td className="px-3 py-3.5 text-slate-600 whitespace-nowrap text-[12.5px] font-medium">{job.started}</td>
+        <td className="px-3 py-3.5 text-slate-600 whitespace-nowrap text-[12.5px] font-medium">{job.eta}</td>
+        <td className="px-4 py-3.5 text-right">
           <div className="flex items-center gap-1.5 justify-end">
             {job.status === "completed" && (
               <>
                 <button
                   title="Deliver job manifest via SMTP"
                   onClick={() => emailJob(job.job_id)}
-                  className="h-8 w-8 grid place-items-center rounded-md border border-line hover:bg-canvas hover:border-[#0F8C7F]/50 hover:text-[#0F8C7F] transition"
+                  className="h-8 w-8 grid place-items-center rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-teal hover:border-teal/50 transition shadow-2xs cursor-pointer"
                 >
                   <Mail size={14} />
                 </button>
                 <button
                   title="Download job manifest (PDF)"
                   onClick={() => downloadJob(job.job_id)}
-                  className="h-8 w-8 grid place-items-center rounded-md border border-line hover:bg-canvas hover:border-primary/40 hover:text-primary transition"
+                  className="h-8 w-8 grid place-items-center rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-[#D2691E] hover:border-[#D2691E]/50 transition shadow-2xs cursor-pointer"
                 >
                   <Download size={14} />
                 </button>
@@ -300,16 +506,16 @@ function JobRow({ job, expanded, onRefresh }: { job: JobDetail; expanded?: boole
               <button
                 title="Simulate job completion and trigger SMTP notification"
                 onClick={() => simulateCompleteJob(job.job_id, onRefresh)}
-                className="h-8 px-2 inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-800 text-[11px] font-semibold hover:bg-emerald-100 transition whitespace-nowrap"
+                className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 text-[11.5px] font-semibold hover:bg-emerald-100 transition shadow-2xs whitespace-nowrap cursor-pointer"
               >
-                <Play size={12} /> Complete &amp; Notify
+                <Play size={12} fill="currentColor" /> Complete &amp; Notify
               </button>
             )}
             {job.status !== "completed" && job.status !== "processing" && (
               <button
                 title="Download job manifest (PDF)"
                 onClick={() => downloadJob(job.job_id)}
-                className="h-8 w-8 grid place-items-center rounded-md border border-line hover:bg-canvas transition"
+                className="h-8 w-8 grid place-items-center rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition shadow-2xs cursor-pointer"
               >
                 <Download size={14} />
               </button>
@@ -318,14 +524,29 @@ function JobRow({ job, expanded, onRefresh }: { job: JobDetail; expanded?: boole
         </td>
       </tr>
       {expanded && (
-        <tr className="border-b border-line">
-          <td colSpan={8} className="px-4 pb-4">
-            <div className="rounded-xl bg-canvas/60 border border-line p-4 grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-6">
+        <tr className="bg-slate-50/60">
+          <td colSpan={8} className="px-4 pb-4 pt-1">
+            <div className="rounded-xl bg-white border border-slate-200 p-5 shadow-xs grid grid-cols-1 lg:grid-cols-[1fr_270px] gap-6">
               <StageTracker job={job} />
-              <div className="text-[13px] space-y-2.5 lg:border-l lg:border-line lg:pl-6">
-                <Row label="Tiles Processed" value={`${job.tiles_processed.toLocaleString()} / ${job.tiles_total.toLocaleString()}`} />
-                <Row label="Data Throughput" value={`${job.throughput_mbps} MB/s`} />
-                <Row label="ETA" value={job.eta ?? "—"} />
+              <div className="text-[13px] space-y-3 lg:border-l lg:border-slate-200 lg:pl-6 flex flex-col justify-center">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <span className="text-slate-500 text-[12.5px]">Tiles Processed</span>
+                  <span className="font-mono font-semibold text-slate-900 text-[13px]">
+                    {job.tiles_processed.toLocaleString()} / {job.tiles_total.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <span className="text-slate-500 text-[12.5px]">Data Throughput</span>
+                  <span className="font-mono font-semibold text-teal text-[13px]">
+                    {job.throughput_mbps} MB/s
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 text-[12.5px]">Est. Completion (ETA)</span>
+                  <span className="font-semibold text-slate-800 text-[13px] font-mono">
+                    {job.eta ?? "—"}
+                  </span>
+                </div>
               </div>
             </div>
           </td>
@@ -337,23 +558,55 @@ function JobRow({ job, expanded, onRefresh }: { job: JobDetail; expanded?: boole
 
 function StageTracker({ job }: { job: JobDetail }) {
   return (
-    <div className="flex items-start">
+    <div className="flex items-start justify-between w-full relative pt-1">
       {job.stages.map((s, i) => {
         const done = s.state === "completed";
         const active = s.state === "in_progress";
         return (
-          <div key={s.name} className="flex-1 flex flex-col items-center relative">
+          <div key={s.name} className="flex-1 flex flex-col items-center relative text-center px-1">
+            {/* Horizontal line connector */}
             {i < job.stages.length - 1 && (
-              <div className={cn("absolute top-3.5 left-1/2 w-full h-0.5", done ? "bg-teal" : active ? "bg-gradient-to-r from-primary to-line" : "bg-line")} />
+              <div
+                className={cn(
+                  "absolute top-4 left-1/2 w-full h-[3px] -z-0",
+                  done
+                    ? "bg-emerald-500"
+                    : active
+                    ? "bg-gradient-to-r from-emerald-500 via-[#D2691E] to-slate-200"
+                    : "bg-slate-200"
+                )}
+              />
             )}
-            <div className={cn("relative z-10 h-7 w-7 rounded-full grid place-items-center",
-              done ? "bg-teal text-white" : active ? "bg-primary text-white" : "bg-white border border-line-strong text-muted")}>
-              {done ? <Check size={15} /> : active ? <MoreHorizontal size={15} /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+            {/* Step Icon Circle */}
+            <div
+              className={cn(
+                "relative z-10 h-8 w-8 rounded-full grid place-items-center transition-all duration-300 shadow-sm",
+                done
+                  ? "bg-emerald-600 text-white ring-4 ring-emerald-100"
+                  : active
+                  ? "bg-[#D2691E] text-white ring-4 ring-orange-100 animate-pulse"
+                  : "bg-white border-2 border-slate-300 text-slate-400"
+              )}
+            >
+              {done ? (
+                <Check size={16} strokeWidth={2.5} />
+              ) : active ? (
+                <MoreHorizontal size={16} />
+              ) : (
+                <span className="h-2 w-2 rounded-full bg-slate-300" />
+              )}
             </div>
-            <div className="text-center mt-2">
-              <div className={cn("text-[12.5px] font-medium", active ? "text-primary" : "text-ink")}>{s.name}</div>
-              <div className="text-[11px] text-muted">{s.detail}</div>
-              {active && s.progress != null && <div className="text-[11px] text-primary font-medium">{s.progress}%</div>}
+            {/* Step Text Info */}
+            <div className="mt-2.5">
+              <div className={cn("text-[13px] font-semibold", active ? "text-[#D2691E]" : done ? "text-slate-900" : "text-slate-500")}>
+                {s.name}
+              </div>
+              <div className="text-[11.5px] text-slate-500 mt-0.5">{s.detail}</div>
+              {active && s.progress != null && (
+                <span className="mt-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#D2691E]/10 text-[#D2691E] inline-flex items-center gap-1">
+                  In Progress {s.progress}%
+                </span>
+              )}
             </div>
           </div>
         );
@@ -362,34 +615,33 @@ function StageTracker({ job }: { job: JobDetail }) {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return <div className="flex justify-between"><span className="text-muted">{label}</span><span className="font-medium text-ink">{value}</span></div>;
-}
-
-function QueueStat({ title, value, sub, icon, bg }: { title: string; value: number; sub: string; icon: React.ReactNode; bg: string }) {
-  return (
-    <Card className="p-2.5 sm:p-4 h-full">
-      <div className="flex items-start gap-2 sm:gap-3">
-        <div className={cn("h-7 w-7 sm:h-11 sm:w-11 rounded-md sm:rounded-xl grid place-items-center shrink-0", bg)}>{icon}</div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] sm:text-[13px] text-muted truncate">{title}</div>
-          <div className="text-[18px] sm:text-[30px] font-semibold leading-tight mt-0.5">{value}</div>
-          <div className="text-[10px] sm:text-[12.5px] text-muted truncate">{sub}</div>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: [string, string][];
+}) {
   return (
     <div>
-      <div className="field-label text-[11px] sm:text-[13px] mb-1">{label}</div>
+      <div className="block text-[12px] font-semibold text-slate-700 uppercase tracking-wider mb-1.5">{label}</div>
       <div className="relative">
-        <select className="select w-full sm:w-[180px] h-9 sm:h-11 text-[11.5px] sm:text-[13px] px-2.5" value={value} onChange={(e) => onChange(e.target.value)}>
-          {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        <select
+          className="w-full sm:w-[175px] h-11 appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-8 text-[13px] font-medium text-slate-800 outline-none transition focus:border-[#D2691E] focus:ring-2 focus:ring-[#D2691E]/10 cursor-pointer"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          {options.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
         </select>
-        <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+        <ChevronDown size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
       </div>
     </div>
   );
@@ -397,8 +649,14 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
 
 function PageBtn({ children, active }: { children: React.ReactNode; active?: boolean }) {
   return (
-    <button className={cn("h-8 min-w-8 px-2 grid place-items-center rounded-md text-[13px] transition",
-      active ? "bg-primary text-white" : "border border-line hover:bg-canvas text-ink-soft")}>
+    <button
+      className={cn(
+        "h-8 min-w-8 px-2 grid place-items-center rounded-lg text-[13px] font-semibold transition cursor-pointer shadow-2xs",
+        active
+          ? "bg-[#D2691E] text-white"
+          : "border border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+      )}
+    >
       {children}
     </button>
   );
