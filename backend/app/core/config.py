@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://sih-26142.vercel.app",
     ]
+
 
     # Upload safety limits
     MAX_UPLOAD_BYTES: int = 100 * 1024 * 1024
