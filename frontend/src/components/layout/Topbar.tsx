@@ -25,6 +25,8 @@ import {
   Mail,
   Send,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { PROJECTS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
@@ -108,7 +110,13 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
 
 type MenuType = "project" | "notifications" | "user" | null;
 
-export function Topbar({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) {
+interface TopbarProps {
+  onOpenMobileMenu?: () => void;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
+}
+
+export function Topbar({ onOpenMobileMenu, sidebarCollapsed = false, onToggleSidebar }: TopbarProps) {
   const user = useCurrentUser();
   const pathname = usePathname();
   const router = useRouter();
@@ -267,11 +275,24 @@ export function Topbar({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
       <button
         type="button"
         onClick={onOpenMobileMenu}
-        className="lg:hidden p-2 -ml-1.5 rounded-lg text-ink-soft hover:bg-canvas hover:text-ink transition shrink-0"
+        className="lg:hidden p-2 -ml-1.5 rounded-lg text-ink-soft hover:bg-canvas hover:text-ink transition shrink-0 cursor-pointer"
         aria-label="Open navigation menu"
       >
         <Menu size={21} />
       </button>
+
+      {/* Desktop Square Sidebar Collapse Toggle Button (Top-Left of Interface) */}
+      {onToggleSidebar && (
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="hidden lg:grid h-9 w-9 place-items-center rounded-lg border border-line bg-surface hover:bg-canvas text-ink-soft hover:text-ink transition shrink-0 shadow-2xs cursor-pointer mr-1"
+        >
+          {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+        </button>
+      )}
 
       {/* Mobile Current Page Title */}
       <div className="sm:hidden font-semibold text-[15px] text-ink truncate min-w-0 flex items-center gap-1.5">
