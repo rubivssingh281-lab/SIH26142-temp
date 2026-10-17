@@ -39,6 +39,7 @@ export default function ProjectsPage() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [page, setPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>("ladakh-border-infrastructure");
 
   // New Project form states
   const [newProjectName, setNewProjectName] = useState("");
@@ -70,6 +71,10 @@ export default function ProjectsPage() {
     localStorage.setItem("bhudristi_selected_project", name);
     toast(`Active workspace switched to "${name}"`, "info");
     router.push("/dashboard");
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedProjectId((prev) => (prev === id ? null : id));
   };
 
   return (
@@ -122,14 +127,25 @@ export default function ProjectsPage() {
 
       {loading && !data ? <LoadingState /> : error ? <ErrorState error={error} /> : data && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 auto-rows-min">
-            {data.projects.map((p, i) =>
-              i === 0 ? (
-                <FeaturedCard key={p.id} p={p} onOpen={() => handleOpenProject(p.name)} />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 items-start">
+            {data.projects.map((p) => {
+              const isSelected = p.id === selectedProjectId;
+              return isSelected ? (
+                <FeaturedCard
+                  key={p.id}
+                  p={p}
+                  onOpen={() => handleOpenProject(p.name)}
+                  onToggle={() => handleToggleSelect(p.id)}
+                />
               ) : (
-                <CompactCard key={p.id} p={p} onOpen={() => handleOpenProject(p.name)} />
-              )
-            )}
+                <CompactCard
+                  key={p.id}
+                  p={p}
+                  onSelect={() => setSelectedProjectId(p.id)}
+                  onOpen={() => handleOpenProject(p.name)}
+                />
+              );
+            })}
           </div>
 
           {/* Pagination */}
@@ -243,55 +259,116 @@ export default function ProjectsPage() {
   );
 }
 
-function FeaturedCard({ p, onOpen }: { p: Project; onOpen: () => void }) {
+function FeaturedCard({
+  p,
+  onOpen,
+  onToggle,
+}: {
+  p: Project;
+  onOpen: () => void;
+  onToggle?: () => void;
+}) {
+  const runs =
+    p.recent_runs && p.recent_runs.length > 0
+      ? p.recent_runs
+      : [
+          { date: "17 May", status: "completed" },
+          { date: "18 May", status: "completed" },
+          { date: "19 May", status: "failed" },
+          { date: "20 May", status: "completed" },
+          { date: "21 May", status: "queued" },
+        ];
+
+  const team =
+    p.team && p.team.length > 0
+      ? p.team
+      : [
+          { initials: "AP", name: "Ananya Patel", color: "#D6532B" },
+          { initials: "RK", name: "Ravi Kumar", color: "#0F8C7F" },
+          { initials: "SS", name: "Sneha Singh", color: "#64748B" },
+        ];
+
   return (
-    <Card className="md:row-span-2 border-primary/40 ring-1 ring-primary/20 overflow-hidden flex flex-col">
-      <div className="relative h-[220px]">
+    <Card className="rounded-2xl border border-line bg-surface overflow-hidden flex flex-col shadow-xs ring-1 ring-primary/25 transition-all duration-200">
+      <div className="relative h-[200px] sm:h-[220px]">
         <SatelliteTile seed={p.cover_image} variant="sr" className="h-full w-full" />
-        <div className="absolute right-3 top-3"><Pill tone="active">{cap(p.status)}</Pill></div>
+        <div className="absolute right-3.5 top-3.5">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
+            {cap(p.status)}
+          </span>
+        </div>
       </div>
-      <div className="p-5 flex-1 flex flex-col">
-        <div className="flex items-center gap-2">
-          <h3 className="text-[18px] font-semibold text-ink">{p.name}</h3>
-          <Pill tone="active">{cap(p.status)}</Pill>
-        </div>
-        <p className="text-[13px] text-muted mt-1.5 leading-snug">{p.description}</p>
+      <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-[18px] sm:text-[19px] font-bold text-ink">{p.name}</h3>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              {cap(p.status)}
+            </span>
+          </div>
+          <p className="text-[13px] text-muted mt-1 leading-snug">{p.description}</p>
 
-        <div className="grid grid-cols-4 gap-2 mt-4 items-center">
-          <Stat icon={<Briefcase size={14} />} value={String(p.jobs)} label="Jobs" />
-          <Stat icon={<CalendarDays size={14} />} value={p.last_updated} label="Last updated" small />
-          <Stat icon={<Maximize2 size={14} />} value={`${p.total_area_km2.toLocaleString()} km²`} label="Total area" small />
-          <div className="flex flex-col items-center"><Donut value={p.complete_pct} size={54} /><span className="text-[11px] text-muted mt-1">Complete</span></div>
-        </div>
+          <div className="grid grid-cols-4 gap-2 mt-4 items-center">
+            <Stat icon={<Briefcase size={14} className="text-muted" />} value={String(p.jobs)} label="Jobs" />
+            <Stat icon={<CalendarDays size={14} className="text-muted" />} value={p.last_updated} label="Last updated" small />
+            <Stat icon={<Maximize2 size={14} className="text-muted" />} value={`${p.total_area_km2.toLocaleString()} km²`} label="Total area" small />
+            <div className="flex flex-col items-center">
+              <Donut value={p.complete_pct} size={52} color="#0F8C7F" />
+              <span className="text-[11px] text-muted mt-1 font-medium">Complete</span>
+            </div>
+          </div>
 
-        <div className="mt-5">
-          <div className="text-[13px] font-medium text-ink mb-3">Recent Job Runs</div>
-          <div className="flex items-center">
-            {p.recent_runs.map((r, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center relative">
-                {i < p.recent_runs.length - 1 && <div className="absolute top-2 left-1/2 w-full h-0.5 bg-teal/40" />}
-                <span className={cn("relative z-10 h-4 w-4 rounded-full border-2 border-white",
-                  r.status === "completed" ? "bg-teal" : r.status === "failed" ? "bg-primary" : r.status === "queued" ? "bg-line-strong" : "bg-warning-soft")} />
-                <span className="text-[11px] text-muted mt-1.5">{r.date}</span>
-              </div>
-            ))}
+          <div className="mt-5">
+            <div className="text-[13px] font-semibold text-ink mb-3">Recent Job Runs</div>
+            <div className="flex items-center px-1">
+              {runs.map((r, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center relative">
+                  {i < runs.length - 1 && (
+                    <div className="absolute top-[7px] left-1/2 w-full h-[2px] bg-[#99D5CF]" />
+                  )}
+                  <span
+                    className={cn(
+                      "relative z-10 h-3.5 w-3.5 rounded-full border-2 border-white shadow-2xs",
+                      r.status === "completed"
+                        ? "bg-[#D97706]"
+                        : r.status === "failed"
+                        ? "bg-[#E11D48]"
+                        : "bg-[#D1D5DB]"
+                    )}
+                  />
+                  <span className="text-[11px] text-muted mt-2 whitespace-nowrap">{r.date}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="mt-5 flex items-center justify-between">
+        <div className="mt-5 flex items-center justify-between gap-3 pt-1">
           <div>
-            <div className="text-[13px] font-medium text-ink mb-2">Team Members</div>
-            <div className="flex -space-x-2">
-              {p.team.map((t) => (
-                <span key={t.initials} className="h-8 w-8 rounded-full ring-2 ring-white grid place-items-center text-[11px] font-semibold text-white" style={{ background: t.color }}>{t.initials}</span>
+            <div className="text-[13px] font-semibold text-ink mb-1.5">Team Members</div>
+            <div className="flex -space-x-1.5 items-center">
+              {team.map((t) => (
+                <span
+                  key={t.initials}
+                  className="h-8 w-8 rounded-full ring-2 ring-white grid place-items-center text-[11px] font-bold text-white shadow-2xs select-none"
+                  style={{ background: t.color }}
+                  title={t.name}
+                >
+                  {t.initials}
+                </span>
               ))}
-              <span className="h-8 w-8 rounded-full ring-2 ring-white bg-canvas grid place-items-center text-[11px] font-medium text-ink-soft">+2</span>
+              <span className="h-8 w-8 rounded-full ring-2 ring-white bg-[#F3F4F6] grid place-items-center text-[11px] font-semibold text-ink-soft shadow-2xs select-none">
+                +2
+              </span>
             </div>
           </div>
           <button
             type="button"
-            onClick={onOpen}
-            className="inline-flex items-center gap-2 h-11 px-4 rounded-lg bg-primary text-white text-[14px] font-semibold hover:bg-primary-hover shadow-sm transition"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen();
+            }}
+            className="inline-flex items-center gap-2 h-10 px-4 sm:px-5 rounded-lg bg-[#D2691E] hover:bg-[#b85816] text-white text-[13.5px] font-semibold shadow-xs transition cursor-pointer shrink-0"
           >
             Open Project <ExternalLink size={15} />
           </button>
@@ -301,27 +378,47 @@ function FeaturedCard({ p, onOpen }: { p: Project; onOpen: () => void }) {
   );
 }
 
-function CompactCard({ p, onOpen }: { p: Project; onOpen: () => void }) {
+function CompactCard({
+  p,
+  onSelect,
+  onOpen,
+}: {
+  p: Project;
+  onSelect: () => void;
+  onOpen: () => void;
+}) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <Card className="overflow-hidden flex flex-col relative group">
-      <div className="relative h-[150px]">
+    <Card
+      onClick={onSelect}
+      className="rounded-2xl border border-line bg-surface overflow-hidden flex flex-col shadow-xs hover:shadow-md hover:border-line-strong transition-all duration-200 cursor-pointer group"
+    >
+      <div className="relative h-[140px] sm:h-[150px]">
         <SatelliteTile seed={p.cover_image} variant="sr" className="h-full w-full" />
-        <div className="absolute right-3 top-3 flex items-center gap-2">
-          <Pill tone={p.status === "active" ? "active" : "archived"}>{cap(p.status)}</Pill>
+        <div className="absolute right-3 top-3 flex items-center gap-1.5 z-10">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
+            {cap(p.status)}
+          </span>
           <button
             type="button"
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="h-8 w-8 grid place-items-center rounded-md bg-white/95 shadow-sm text-ink-soft hover:text-ink transition"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen(!menuOpen);
+            }}
+            className="h-8 w-8 grid place-items-center rounded-lg bg-white shadow-2xs text-ink-soft hover:text-ink transition cursor-pointer border border-slate-200/60"
+            aria-label="More options"
           >
-            <MoreVertical size={15} />
+            <MoreVertical size={16} />
           </button>
         </div>
 
         {menuOpen && (
-          <div className="absolute right-3 top-12 z-20 w-44 rounded-xl border border-line bg-surface p-1.5 shadow-xl text-[12px]">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute right-3 top-12 z-20 w-44 rounded-xl border border-line bg-surface p-1.5 shadow-xl text-[12px]"
+          >
             <button
               onClick={() => {
                 setMenuOpen(false);
@@ -356,27 +453,48 @@ function CompactCard({ p, onOpen }: { p: Project; onOpen: () => void }) {
       <div className="p-4 flex-1 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between gap-2">
-            <h3
-              onClick={onOpen}
-              className="text-[15.5px] font-semibold text-ink cursor-pointer hover:text-primary transition"
-            >
+            <h3 className="text-[16px] font-bold text-ink group-hover:text-primary transition">
               {p.name}
             </h3>
           </div>
+
           <div className="grid grid-cols-4 gap-2 mt-3 items-center">
-            <Stat value={String(p.jobs)} label="Jobs" />
-            <Stat value={p.last_updated} label="Last updated" small />
-            <Stat value={`${p.total_area_km2.toLocaleString()} km²`} label="Total area" small />
-            <div className="flex flex-col items-center"><Donut value={p.complete_pct} size={48} /><span className="text-[10.5px] text-muted mt-1">Complete</span></div>
+            <div>
+              <div className="font-bold text-ink text-[16px]">{p.jobs}</div>
+              <div className="text-[11px] text-muted">Jobs</div>
+            </div>
+            <div>
+              <div className="font-bold text-ink text-[12.5px]">{p.last_updated}</div>
+              <div className="text-[11px] text-muted">Last updated</div>
+            </div>
+            <div>
+              <div className="font-bold text-ink text-[12.5px]">{p.total_area_km2.toLocaleString()} km²</div>
+              <div className="text-[11px] text-muted">Total area</div>
+            </div>
+            <div className="flex flex-col items-center">
+              <Donut value={p.complete_pct} size={48} color="#0F8C7F" />
+              <span className="text-[10.5px] text-muted mt-1 font-medium">Complete</span>
+            </div>
           </div>
-          <ProgressBar value={p.complete_pct} className="mt-3" />
+
+          <div className="mt-3.5">
+            <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-[#0F8C7F] transition-all duration-500"
+                style={{ width: `${p.complete_pct}%` }}
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-line flex justify-end">
+        <div className="mt-3.5 pt-2.5 border-t border-line flex justify-end">
           <button
             type="button"
-            onClick={onOpen}
-            className="text-[12.5px] font-semibold text-primary hover:underline inline-flex items-center gap-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen();
+            }}
+            className="text-[13px] font-semibold text-[#D2691E] hover:underline inline-flex items-center gap-1 cursor-pointer"
           >
             Open Project →
           </button>
