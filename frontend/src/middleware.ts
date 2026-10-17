@@ -11,6 +11,20 @@ const PUBLIC_PATHS = [
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isLogoutRequested =
+    request.nextUrl.searchParams.get("logout") === "true" ||
+    request.nextUrl.searchParams.get("logout") === "1" ||
+    pathname === "/logout";
+
+  if (isLogoutRequested) {
+    const response = pathname === "/logout"
+      ? NextResponse.redirect(new URL("/login?logout=true", request.url))
+      : NextResponse.next();
+    response.cookies.delete("bhudristi_session");
+    response.cookies.delete("ip_sakti_session");
+    return response;
+  }
+
   const isPublic = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
   const token =
     request.cookies.get("bhudristi_session")?.value ||

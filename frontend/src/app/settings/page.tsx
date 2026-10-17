@@ -27,6 +27,7 @@ import { Card, Toggle, Checkbox, RatingChip, Button } from "@/components/ui/Prim
 import { LoadingState, ErrorState } from "@/components/ui/PageState";
 import type { ModelType } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { logoutUser } from "@/lib/auth";
 
 import { Camera, Clock3, MapPin, Monitor, LogOut } from "lucide-react";
 
@@ -1279,9 +1280,9 @@ function SettingsContent() {
                             </td>
                             <td className="px-3 py-3 text-right">
                               {session.current ? (
-                                <span className="text-[9px] text-slate-400">—</span>
+                                <button type="button" onClick={async () => { toast("Logging out current session...", "info"); await logoutUser(); }} className="text-[9px] font-medium text-red-600 hover:underline cursor-pointer">Log Out</button>
                               ) : (
-                                <button type="button" onClick={() => handleLogoutSession(session.id)} className="text-[9px] font-medium text-red-600 hover:underline">Log Out</button>
+                                <button type="button" onClick={() => { handleLogoutSession(session.id); toast("Session terminated", "success"); }} className="text-[9px] font-medium text-red-600 hover:underline cursor-pointer">Log Out</button>
                               )}
                             </td>
                           </tr>
@@ -1289,7 +1290,7 @@ function SettingsContent() {
                       </tbody>
                     </table>
                   </div>
-                  <button type="button" onClick={handleLogoutOthers} className="mt-3 inline-flex h-[35px] items-center gap-2 rounded-md border border-[#D2691E] px-3.5 text-[10px] font-medium text-[#D2691E] hover:bg-[#FFF5EF]">
+                  <button type="button" onClick={() => { handleLogoutOthers(); toast("Logged out all other sessions", "success"); }} className="mt-3 inline-flex h-[35px] items-center gap-2 rounded-md border border-[#D2691E] px-3.5 text-[10px] font-medium text-[#D2691E] hover:bg-[#FFF5EF] cursor-pointer">
                     <LogOut size={13} /> Log Out All Other Sessions
                   </button>
                 </SectionCard>
@@ -2278,7 +2279,7 @@ function SettingsContent() {
                       </div>
                       <span className="rounded-md bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700">Current Device</span>
                     </div>
-                    <button type="button" onClick={() => window.location.href = '/login'} className="mt-2 flex h-[43px] w-full items-center justify-center gap-2 rounded-[7px] border border-red-300 text-[13px] font-medium text-red-600 transition hover:bg-red-50">
+                    <button type="button" onClick={async () => { toast("Logging out of all devices...", "info"); await logoutUser(); }} className="mt-2 flex h-[43px] w-full items-center justify-center gap-2 rounded-[7px] border border-red-300 text-[13px] font-medium text-red-600 transition hover:bg-red-50 cursor-pointer">
                       <LogOut size={16} /> Log out of all devices
                     </button>
                   </div>

@@ -12,7 +12,7 @@ import { SatelliteTile } from "@/components/map/SatelliteTile";
 import { Logo } from "@/components/layout/Logo";
 import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
-import { authApi, setBrowserSession } from "@/lib/auth";
+import { authApi, setBrowserSession, clearBrowserSession } from "@/lib/auth";
 
 type Mode = "login" | "signup";
 type LoginMethod = "password" | "otp";
@@ -109,6 +109,16 @@ export function AuthScreen({ mode }: { mode: Mode }) {
     }, 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // Clean stale session if arriving via logout
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("logout") === "true" || params.get("logout") === "1") {
+        clearBrowserSession();
+      }
+    }
+  }, []);
 
   // Google Firebase redirect handler
   useEffect(() => {

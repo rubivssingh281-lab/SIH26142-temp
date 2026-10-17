@@ -61,15 +61,56 @@ export function setBrowserSession(token: string, user?: AuthUser | null) {
 export function clearBrowserSession() {
   if (typeof window === "undefined") return;
 
-  localStorage.removeItem("bhudristi_token");
-  localStorage.removeItem("bhudristi_user");
-  localStorage.removeItem("ip-sakti-token");
-  localStorage.removeItem("ip-sakti-user");
+  const storageKeys = [
+    "bhudristi_token",
+    "bhudristi_user",
+    "ip-sakti-token",
+    "ip-sakti-user",
+    "access_token",
+    "token",
+    "user",
+    "bhudristi_google_pending",
+  ];
+  storageKeys.forEach((key) => {
+    try {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    } catch {}
+  });
 
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `bhudristi_session=; path=/; max-age=0; SameSite=Lax${secure}`;
-  document.cookie = `ip_sakti_session=; path=/; max-age=0; SameSite=Lax${secure}`;
+  const cookieNames = ["bhudristi_session", "ip_sakti_session"];
+  cookieNames.forEach((name) => {
+    document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax${secure}`;
+    document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=None; Secure`;
+  });
+
   window.dispatchEvent(new Event("bhudristi-auth-expired"));
+}
+
+export async function logoutUser(redirectTo = "/login?logout=true") {
+  if (typeof window === "undefined") return;
+
+  clearBrowserSession();
+
+  // Try to sign out of Firebase if initialized
+  try {
+    const { getAuth, signOut } = await import("firebase/auth").catch(() => ({} as any));
+    if (getAuth && signOut) {
+      const auth = getAuth();
+      if (auth && auth.currentUser) {
+        await signOut(auth).catch(() => {});
+      }
+    }
+  } catch {}
+
+  // Request server route to expire HTTP cookies
+  try {
+    await fetch("/api/v1/auth/logout", { method: "POST" }).catch(() => {});
+  } catch {}
+
+  // Force clean navigation to login with logout parameter
+  window.location.replace(redirectTo);
 }
 
 export function getBrowserSession(): { token: string | null; user: AuthUser | null } {

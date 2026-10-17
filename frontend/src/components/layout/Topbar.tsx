@@ -30,7 +30,7 @@ import { CURRENT_USER, PROJECTS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
-
+import { logoutUser } from "@/lib/auth";
 
 const CRUMBS: Record<string, string[]> = {
   "/dashboard": ["Projects", "Ladakh Border Infrastructure", "SR_v2", "Dashboard"],
@@ -671,17 +671,18 @@ export function Topbar({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
 
               <div className="my-1.5 border-t border-line" />
 
-              <Link
-                href="/login"
-                onClick={() => {
+              <button
+                type="button"
+                onClick={async () => {
                   setOpenMenu(null);
-                  toast("Logged out of session", "info");
+                  toast("Logging out of session...", "info");
+                  await logoutUser();
                 }}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-danger hover:bg-red-50/60 transition text-[13px] font-medium"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-danger hover:bg-red-50/60 transition text-[13px] font-medium text-left cursor-pointer"
               >
                 <LogOut size={15} />
                 <span>Log Out Session</span>
-              </Link>
+              </button>
             </div>
           )}
         </div>
